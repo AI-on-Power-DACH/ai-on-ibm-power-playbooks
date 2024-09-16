@@ -1,0 +1,11 @@
+# OSX
+.DS_Store
+_DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# __pycache__
+__pycache__/
+**/__pycache__/
