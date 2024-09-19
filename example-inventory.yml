@@ -1,0 +1,13 @@
+techzone:
+  hosts:
+    my_host_1:
+      ansible_host: 8.8.8.8
+      ansible_password: super_secret_password
+  vars:
+    ansible_user: user1
+    auto_start: true
+    conda_dir: "/home/{{ ansible_user }}/micromamba"
+    detached: true
+    micromamba_location: "/usr/local/bin/micromamba"
+    python_version: 3.11
+    working_directory: "/home/{{ ansible_user }}/llm"
