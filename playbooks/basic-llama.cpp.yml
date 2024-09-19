@@ -105,10 +105,10 @@
     
     - name: Deploy LLM on llama.cpp server (detached)
       ansible.builtin.raw: |
-        nohup {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 </dev/null >/dev/null 2>&1 & sleep 1
+        nohup {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 --api-key "{{ api_key }}" </dev/null >/dev/null 2>&1 & sleep 1
       when: detached and auto_start
     
     - name: Deploy LLM on llama.cpp server
       ansible.builtin.raw: |
-        {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096
+        {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 --api-key "{{ api_key }}"
       when: not detached and auto_start

@@ -5,6 +5,7 @@ techzone:
       ansible_password: super_secret_password
   vars:
     ansible_user: user1
+    api_key: example-key01
     auto_start: true
     conda_dir: "/home/{{ ansible_user }}/micromamba"
     detached: true
