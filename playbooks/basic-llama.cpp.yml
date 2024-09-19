@@ -1,0 +1,114 @@
+- name: System setup
+  hosts: techzone
+  tasks:
+    - name: Ping my host
+      ansible.builtin.ping:
+    
+    - name: Create working directory
+      ansible.builtin.file:
+        path: "{{ working_directory }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+    
+    - name: Install the 'Development tools' package group
+      become: true
+      become_user: root
+      dnf:
+        name: '@Development tools'
+        state: present
+    
+    - name: Install further system dependencies
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - bzip2
+          - cmake
+          - git
+          - openblas-devel
+        state: latest
+    
+- name: Micromamba setup
+  hosts: techzone
+  tasks:
+    - name: "Check if micromamba already exists in {{ micromamba_location }}"
+      ansible.builtin.stat:
+        path: "{{ micromamba_location }}"
+      register: dest_stat
+
+    - name: Install micromamba
+      ansible.builtin.import_tasks: download-and-extract-micromamba.yml
+      when: not dest_stat.stat.exists
+    
+    - name: Create environment and install basic dependencies
+      ansible.builtin.command:
+        argv:
+          - micromamba
+          - install
+          - --yes
+          - "--root-prefix={{ conda_dir }}"
+          - "--prefix={{ conda_dir }}"
+          - --channel=rocketce
+          - --channel=defaults
+          - "python={{ python_version }}"
+          - numpy
+          - pytorch-cpu
+          - sentencepiece
+          - "conda-forge::gguf"
+  vars:
+    arch: linux-ppc64le
+    version: latest
+
+- name: LLM setup
+  hosts: techzone
+  tasks:
+    - name: Clone llama.cpp repository
+      git:
+       repo: https://github.com/ggerganov/llama.cpp.git
+       dest: "{{ working_directory }}/llama.cpp"
+       clone: yes
+       force: true
+       update: yes
+    
+    - name: Create build directory
+      ansible.builtin.file:
+        path: "{{ working_directory }}/llama.cpp/build"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+
+    - name: Build llama.cpp with optimizations
+      ansible.builtin.shell: |
+        cmake -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS ..;
+        cmake --build . --config Release;
+      args:
+        chdir: "{{ working_directory }}/llama.cpp/build"
+
+    - name: Make server binary executable
+      ansible.builtin.file:
+        path: "{{ working_directory }}/llama.cpp/build/bin/llama-server"
+        owner: "{{ ansible_user }}"
+        mode: 0777
+    
+    - name: Install huggingface-cli
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install -U "huggingface_hub[cli]"
+        
+    - name: Provide LLM
+      ansible.builtin.shell: |
+        huggingface-cli download \
+          QuantFactory/Meta-Llama-3-8B-GGUF Meta-Llama-3-8B.Q8_0.gguf \
+          --local-dir {{ working_directory }}/models/Meta-Llama-3-8B-Instruct
+    
+    - name: Deploy LLM on llama.cpp server (detached)
+      ansible.builtin.raw: |
+        nohup {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 </dev/null >/dev/null 2>&1 & sleep 1
+      when: detached and auto_start
+    
+    - name: Deploy LLM on llama.cpp server
+      ansible.builtin.raw: |
+        {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096
+      when: not detached and auto_start
