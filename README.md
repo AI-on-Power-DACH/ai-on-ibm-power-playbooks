@@ -7,6 +7,12 @@ This repository contains Ansible playbooks helping to set up IBM Power environme
 
 ## Usage
 
+If Ansible is not already installed on your local machine, you can install it via ([more information](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html)):
+
+```shell
+pip install ansible
+```
+
 Make sure to adjust the example inventory file before using it.
 
 ```shell
