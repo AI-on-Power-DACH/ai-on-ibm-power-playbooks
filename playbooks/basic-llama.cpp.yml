@@ -103,12 +103,46 @@
           QuantFactory/Meta-Llama-3-8B-GGUF Meta-Llama-3-8B.Q8_0.gguf \
           --local-dir {{ working_directory }}/models/Meta-Llama-3-8B-Instruct
     
+    - name: Build parameter list (-)
+      ansible.builtin.set_fact:
+        llama_cpp_args: >-
+          {% set result = [] -%}
+          {% for key in llama_cpp_args.keys() -%}
+            {% set ignored = result.extend(["-" + key, llama_cpp_args[key]]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: llama_cpp_args is defined
+
+    - name: Build parameter list (--)
+      ansible.builtin.set_fact:
+        llama_cpp_argv: >-
+          {% set result = [] -%}
+          {% for key in llama_cpp_argv.keys() -%}
+            {% set ignored = result.extend(["--" + key, llama_cpp_argv[key]]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: llama_cpp_argv is defined
+
+    - name: Default llama.cpp parameter list (-)
+      ansible.builtin.set_fact:
+        llama_cpp_args: ""
+      when: llama_cpp_args is not defined
+
+    - name: Default llama.cpp parameter list (--)
+      ansible.builtin.set_fact:
+        llama_cpp_argv: ""
+      when: llama_cpp_argv is not defined
+
+    - name: Print parameter lists
+      ansible.builtin.debug:
+        msg: "Parameters: {{ llama_cpp_args }} {{ llama_cpp_argv }}"
+
     - name: Deploy LLM on llama.cpp server (detached)
       ansible.builtin.raw: |
-        nohup {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 --api-key "{{ api_key }}" </dev/null >/dev/null 2>&1 & sleep 1
+        nohup {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 {{ llama_cpp_args }} {{ llama_cpp_argv }} </dev/null >/dev/null 2>&1 & sleep 1
       when: detached and auto_start
-    
+
     - name: Deploy LLM on llama.cpp server
       ansible.builtin.raw: |
-        {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 --api-key "{{ api_key }}"
+        {{ working_directory }}/llama.cpp/build/bin/llama-server --host 0.0.0.0 -m {{ working_directory }}/models/Meta-Llama-3-8B-Instruct/Meta-Llama-3-8B.Q8_0.gguf -c 4096 {{ llama_cpp_args }} {{ llama_cpp_argv }}
       when: not detached and auto_start

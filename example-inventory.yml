@@ -5,10 +5,14 @@ techzone:
       ansible_password: super_secret_password
   vars:
     ansible_user: user1
-    api_key: example-key01
     auto_start: true
     conda_dir: "/home/{{ ansible_user }}/micromamba"
     detached: true
     micromamba_location: "/usr/local/bin/micromamba"
     python_version: 3.11
     working_directory: "/home/{{ ansible_user }}/llm"
+    llama_cpp_args:
+      v: ""
+      b: 123
+    llama_cpp_argv:
+      api-key: examplekey01

@@ -18,10 +18,11 @@ ansible-playbook -i example-inventory.yml playbooks/basic-llama.cpp.yml
 
 The following parameters can be specified in the inventory:
 
-- **api_key** (*string*): API key needed to access llama.cpp endpoint.
 - **auto_start** (*bool*): If set to `true`, the llama.cpp server will be started by Ansible.
 - **conda_dir** (*string*): Path is used as the `root_prefix` and `prefix` of Micromamba. Will be created if it does not exist.
 - **detached** (*bool*): If set to `true`, the llama.cpp server is started in the background and the playbook can finish without terminating the process. Is ignored if `auto_start` is set to `false`.
 - **micromamba_location** (*string*): Path to where the Micromamba binary gets stored.
 - **python_version** (*string*): Python version number, e.g. `3.11`.
 - **working_directory** (*string*): Path to the working directory. Will be created if it does not exist.
+- **llama_cpp_args** (*dictionary*): Key-value pairs passed to `llama-server` in the format `-KEY VALUE`. For parameters without additional value, like `-v`, provide the empty string `""` as value.
+- **llama_cpp_argv** (*dictionary*): Key-value pairs passed to `llama-server` in the format `--KEY VALUE`. For parameters without additional value, like `--verbose`, provide the empty string `""` as value.
