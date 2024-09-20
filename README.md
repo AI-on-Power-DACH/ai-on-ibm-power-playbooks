@@ -22,7 +22,9 @@ The following parameters can be specified in the inventory:
 - **conda_dir** (*string*): Path is used as the `root_prefix` and `prefix` of Micromamba. Will be created if it does not exist.
 - **detached** (*bool*): If set to `true`, the llama.cpp server is started in the background and the playbook can finish without terminating the process. Is ignored if `auto_start` is set to `false`.
 - **micromamba_location** (*string*): Path to where the Micromamba binary gets stored.
+- **model_repository** (*string*): Huggingface repository name, e.g. `QuantFactory/Meta-Llama-3-8B-GGUF`.
+- **model_file** (*string*): File to download from given `model_repository`, e.g. `Meta-Llama-3-8B.Q8_0.gguf`.
 - **python_version** (*string*): Python version number, e.g. `3.11`.
 - **working_directory** (*string*): Path to the working directory. Will be created if it does not exist.
-- **llama_cpp_args** (*dictionary*): Key-value pairs passed to `llama-server` in the format `-KEY VALUE`. For parameters without additional value, like `-v`, provide the empty string `""` as value.
-- **llama_cpp_argv** (*dictionary*): Key-value pairs passed to `llama-server` in the format `--KEY VALUE`. For parameters without additional value, like `--verbose`, provide the empty string `""` as value.
+- **llama_cpp_args** (*dictionary*): Key-value pairs passed to `llama-server` in the format `-KEY VALUE`. For parameters without additional value, like `-v`, leave the value blank.
+- **llama_cpp_argv** (*dictionary*): Key-value pairs passed to `llama-server` in the format `--KEY VALUE`. For parameters without additional value, like `--verbose`, leave the value blank.

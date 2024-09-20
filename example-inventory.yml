@@ -9,10 +9,14 @@ techzone:
     conda_dir: "/home/{{ ansible_user }}/micromamba"
     detached: true
     micromamba_location: "/usr/local/bin/micromamba"
+    model_repository: QuantFactory/Meta-Llama-3-8B-GGUF
+    model_file: Meta-Llama-3-8B.Q8_0.gguf
     python_version: 3.11
     working_directory: "/home/{{ ansible_user }}/llm"
     llama_cpp_args:
-      v: ""
+      v: 
       b: 123
+      c: 4096
     llama_cpp_argv:
       api-key: examplekey01
+      host: 0.0.0.0
