@@ -42,7 +42,7 @@
       ansible.builtin.import_tasks: download-and-extract-micromamba.yml
       when: not dest_stat.stat.exists
     
-    - name: Create environment and install basic dependencies
+    - name: Install basic Python dependencies
       ansible.builtin.command:
         argv:
           - micromamba

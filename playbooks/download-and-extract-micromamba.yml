@@ -1,3 +1,11 @@
+- name: Create prefix directory
+  ansible.builtin.file:
+    path: "{{ conda_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    mode: 0775
+    recurse: yes
+
 - name: Create temporary directory
   ansible.builtin.tempfile:
     state: directory
@@ -23,7 +31,7 @@
     state: absent
 
 - name: Create shell function for micromamba
-  ansible.builtin.shell: "micromamba shell init --shell=bash --prefix={{ conda_dir }}"
+  ansible.builtin.shell: "micromamba shell init --shell=bash"
     
 - name: Activate micromamba environment
   ansible.builtin.shell: "echo 'micromamba activate --prefix={{ conda_dir }}' >> /home/{{ ansible_user }}/.bashrc"
