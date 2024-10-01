@@ -15,7 +15,6 @@ techzone:
     working_directory: "/home/{{ ansible_user }}/llm"
     llama_cpp_args:
       v: 
-      b: 123
       c: 4096
     llama_cpp_argv:
       api-key: examplekey01
