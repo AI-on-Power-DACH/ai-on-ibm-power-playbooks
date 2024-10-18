@@ -34,3 +34,5 @@ The following parameters can be specified in the inventory:
 - **working_directory** (*string*): Path to the working directory. Will be created if it does not exist.
 - **llama_cpp_args** (*dictionary*): Key-value pairs passed to `llama-server` in the format `-KEY VALUE`. For parameters without additional value, like `-v`, leave the value blank.
 - **llama_cpp_argv** (*dictionary*): Key-value pairs passed to `llama-server` in the format `--KEY VALUE`. For parameters without additional value, like `--verbose`, leave the value blank.
+- **uvicorn_cpp_args** (*dictionary*): Key-value pairs passed to `uvicorn` in the format `-KEY VALUE`. For parameters without additional value, like `-v`, leave the value blank.
+- **uvicorn_cpp_argv** (*dictionary*): Key-value pairs passed to `uvicorn` in the format `--KEY VALUE`. For parameters without additional value, like `--verbose`, leave the value blank.

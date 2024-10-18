@@ -1,0 +1,162 @@
+- name: System setup
+  hosts: techzone
+  tasks:
+    - name: Ping my host
+      ansible.builtin.ping:
+    
+    - name: Create working directory
+      ansible.builtin.file:
+        path: "{{ working_directory }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+    
+    - name: Get RHEL version
+      ansible.builtin.shell: rpm -E %rhel
+      register: rhel_version
+    
+    - name: Print RHEL version
+      ansible.builtin.debug:
+        msg: "RHEL version: {{ rhel_version.stdout }}"
+    
+    - rpm_key:
+        state: present
+        key: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ rhel_version.stdout }}"
+      become: true
+      become_user: root
+    
+    - name: Enable enterprise package
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - dnf-plugins-core
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ rhel_version.stdout }}.noarch.rpm"
+        state: latest
+    
+    - name: Install the 'Development tools' package group
+      become: true
+      become_user: root
+      dnf:
+        name: '@Development tools'
+        state: present
+    
+    - name: Install further system dependencies
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - bzip2
+          - libxcrypt-compat
+          - openssl
+        state: latest
+    
+- name: Micromamba setup
+  hosts: techzone
+  tasks:
+    - name: "Check if micromamba already exists in {{ micromamba_location }}"
+      ansible.builtin.stat:
+        path: "{{ micromamba_location }}"
+      register: dest_stat
+
+    - name: Install micromamba
+      ansible.builtin.import_tasks: download-and-extract-micromamba.yml
+      when: not dest_stat.stat.exists
+    
+    - name: Create environment and install basic dependencies
+      ansible.builtin.command:
+        argv:
+          - micromamba
+          - install
+          - --yes
+          - "--root-prefix={{ conda_dir }}"
+          - "--prefix={{ conda_dir }}"
+          - --channel=rocketce
+          - --channel=defaults
+          - "python={{ python_version }}"
+          - arrow
+          - bcrypt
+          - fastapi
+          - httptools
+          - numpy
+          - onnx
+          - onnxruntime
+          - pandas
+          - protobuf
+          - pyarrow
+          - pytorch-cpu
+          - transformers
+          - ujson
+          - uvicorn
+  vars:
+    arch: linux-ppc64le
+    version: latest
+
+- name: LLM setup
+  hosts: techzone
+  tasks:
+    - name: Install optimum-cli
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install --prefer-binary --no-cache-dir "git+https://github.com/mgiessing/optimum.git@quant_ppc64le"
+
+    - name: Download and convert model to onnx
+      ansible.builtin.command:
+        argv:
+          - optimum-cli
+          - export
+          - onnx
+          - --model
+          - "{{ model_repository }}"
+          - "{{ working_directory }}/model_onnx"
+    
+    - name: Copy execution script
+      ansible.builtin.copy:
+        src: ../scripts/onnxruntime_api.py
+        dest: "{{ working_directory }}/onnxruntime_api.py"
+        owner: "{{ ansible_user }}"
+        mode: u=rw,g=r,o=rwx
+    
+    - name: Build parameter list (-)
+      ansible.builtin.set_fact:
+        uvicorn_args: >-
+          {% set result = [] -%}
+          {% for key in uvicorn_args.keys() -%}
+            {% set ignored = result.extend(["-" + key, uvicorn_args[key] or ""]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: uvicorn_args is defined
+
+    - name: Build parameter list (--)
+      ansible.builtin.set_fact:
+        uvicorn_argv: >-
+          {% set result = [] -%}
+          {% for key in uvicorn_argv.keys() -%}
+            {% set ignored = result.extend(["--" + key, uvicorn_argv[key] or ""]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: uvicorn_argv is defined
+
+    - name: Default uvicorn parameter list (-)
+      ansible.builtin.set_fact:
+        uvicorn_args: ""
+      when: uvicorn_args is not defined
+
+    - name: Default llama.cpp parameter list (--)
+      ansible.builtin.set_fact:
+        uvicorn_argv: "--host 0.0.0.0 --port 8080"
+      when: uvicorn_argv is not defined
+
+    - name: Print parameter lists
+      ansible.builtin.debug:
+        msg: "Parameters: {{ uvicorn_args }} {{ uvicorn_argv }}"
+
+    - name: Deploy LLM on uvicorn server (detached)
+      ansible.builtin.raw: |
+        cd {{ working_directory }} && MODEL_ID="{{ working_directory }}/model_onnx" nohup uvicorn onnxruntime_api:app {{ uvicorn_args }} {{ uvicorn_argv }} </dev/null >/dev/null 2>&1 & sleep 1
+      when: detached and auto_start
+
+    - name: Deploy LLM on uvicorn server
+      ansible.builtin.raw: |
+        cd {{ working_directory }} && MODEL_ID="{{ working_directory }}/model_onnx" uvicorn onnxruntime_api:app {{ uvicorn_args }} {{ uvicorn_argv }}
+      when: not detached and auto_start
