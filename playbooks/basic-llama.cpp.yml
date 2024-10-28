@@ -125,7 +125,7 @@
       ansible.builtin.shell: |
         python{{ python_version }} -m pip install -U "huggingface_hub[cli]"
         
-    - name: Provide LLM
+    - name: Download LLM
       ansible.builtin.shell: |
         huggingface-cli download \
           {{ model_repository }} {{ model_file }} \
