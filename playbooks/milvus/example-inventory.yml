@@ -8,3 +8,5 @@ techzone:
     working_directory: "/home/{{ ansible_user }}/milvus"
     milvus_port: 19530
     milvus_etcd_port: 2379
+    micromamba_location: "/usr/local/bin/micromamba"
+    conda_dir: "/home/{{ ansible_user }}/micromamba"
