@@ -13,9 +13,9 @@ A sub collection of ansible playbooks for deploying the vector database [milvus]
 
 The following additional parameters can be specified in the inventory:
 
-- **milvus_port:** The port to expose milvus on
-- **milvus_etcd_port**: The port for milvus embedded etcd service 
-- **auto_start**: Boolean, whther the milvus pod should be started immediately.
+- **milvus_port** (integer): The port to expose milvus on
+- **milvus_etcd_port** (integer): The port for milvus embedded etcd service 
+- **auto_start** (boolean): whether the milvus pod should be started immediately.
 - Also take a look at the root level README. Many parameters also apply here.
 
 For an example configuration, see the [example-inventory.yml](example-inventory.yml) file.
