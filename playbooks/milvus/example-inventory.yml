@@ -1,0 +1,10 @@
+techzone:
+  hosts:
+    techzone1:
+  vars:
+    ansible_user: user
+    auto_start: true
+    python_version: 3.11
+    working_directory: "/home/{{ ansible_user }}/milvus"
+    milvus_port: 19530
+    milvus_etcd_port: 2379
