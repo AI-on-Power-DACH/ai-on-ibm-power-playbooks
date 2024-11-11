@@ -45,7 +45,15 @@
    - name: Pulling Image
      ansible.builtin.raw: |
         podman pull quay.io/mgiessing/milvus:v2.3.1
-     when: container_status.rc == 1
+     when: container_status.rc == 1 
+
+   - name: Allow Podman runs after ssh disconnect
+     become: true
+     become_user: root
+     ansible.builtin.command:
+      argv:
+       - loginctl
+       - enable-linger
 
    - name: Starting Container
      ansible.builtin.raw: |

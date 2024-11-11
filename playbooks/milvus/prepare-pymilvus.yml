@@ -20,6 +20,14 @@
         path: "{{ micromamba_location }}"
       register: dest_stat
 
+    - name: Install System Requirements
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - bzip2
+      when: not dest_stat.stat.exists
+
     - name: Install micromamba
       ansible.builtin.import_tasks: ../download-and-extract-micromamba.yml
       when: not dest_stat.stat.exists
@@ -50,7 +58,7 @@
 
     - name: Persist Root Prefix
       ansible.builtin.command:
-        cmd: "micromamba sehll init -s bash --root-prefix={{ conda_dir }}" 
+        cmd: "micromamba shell init -s bash --root-prefix={{ conda_dir }}" 
       when: root_prefix.stdout != conda_dir
 
   vars:
@@ -65,9 +73,10 @@
         argv:
           - micromamba
           - run
+          - --root-prefix={{ conda_dir }}
           - -n
           - milvus
           - pip
           - install
           - pymilvus
-          - sentence-transformers 
+          - sentence-transformers
