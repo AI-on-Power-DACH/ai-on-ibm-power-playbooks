@@ -44,7 +44,7 @@
 
    - name: Pulling Image
      ansible.builtin.raw: |
-        podman pull quay.io/mgiessing/milvus:v2.3.1
+        podman pull quay.io/mmielimonka/milvus:v2.4.15
      when: container_status.rc == 1 
 
    - name: Allow Podman runs after ssh disconnect
