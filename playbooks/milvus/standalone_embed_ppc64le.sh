@@ -30,6 +30,7 @@
 
 milvus_port=19530
 etcd_port=2379
+container_util=podman
 
 run_embed() {
     cat << EOF > embedEtcd.yaml
@@ -40,7 +41,7 @@ auto-compaction-mode: revision
 auto-compaction-retention: '1000'
 EOF
 
-    podman run -d \
+    ${container_util} run -d \
         --name milvus-standalone \
         --security-opt seccomp:unconfined \
         -e ETCD_USE_EMBED=true \
@@ -65,7 +66,7 @@ wait_for_milvus_running() {
     echo "Wait for Milvus Starting..."
     while true
     do
-        res=`podman ps|grep milvus-standalone|grep healthy|wc -l`
+        res=`${container_util} ps|grep milvus-standalone|grep healthy|wc -l`
         if [ $res -eq 1 ]
         then
             echo "Start successfully."
@@ -76,17 +77,17 @@ wait_for_milvus_running() {
 }
 
 start() {
-    res=`podman ps|grep milvus-standalone|grep healthy|wc -l`
+    res=`${container_util} ps|grep milvus-standalone|grep healthy|wc -l`
     if [ $res -eq 1 ]
     then
         echo "Milvus is running."
         exit 0
     fi
 
-    res=`podman ps -a|grep milvus-standalone|wc -l`
+    res=`${container_util} ps -a|grep milvus-standalone|wc -l`
     if [ $res -eq 1 ]
     then
-        podman start milvus-standalone 1> /dev/null
+        ${container_util} start milvus-standalone 1> /dev/null
     else
         mkdir -p $(pwd)/volumes/milvus
         run_embed
@@ -102,7 +103,7 @@ start() {
 }
 
 stop() {
-    podman stop milvus-standalone 1> /dev/null
+    ${container_util} stop milvus-standalone 1> /dev/null
 
     if [ $? -ne 0 ]
     then
@@ -114,13 +115,13 @@ stop() {
 }
 
 delete() {
-    res=`podman  ps|grep milvus-standalone|wc -l`
+    res=`${container_util}  ps|grep milvus-standalone|wc -l`
     if [ $res -eq 1 ]
     then
         echo "Please stop Milvus service before delete."
         exit 1
     fi
-    podman rm milvus-standalone 1> /dev/null
+    ${container_util} rm milvus-standalone 1> /dev/null
     if [ $? -ne 0 ]
     then
         echo "Delete failed."
@@ -132,7 +133,7 @@ delete() {
 }
 
 status() {
-    res=`podman ps|grep milvus-standalone|wc -l`
+    res=`${container_util} ps|grep milvus-standalone|wc -l`
     if [ $res -eq 1 ]
     then
         echo "running." 
@@ -146,13 +147,14 @@ status() {
 
 op=$1
 shift 1
-while getopts "e:m:" flag;
+while getopts "e:m:c:" flag;
 do 
     case "${flag}" in
         m) milvus_port=${OPTARG};;
         e) etcd_port=${OPTARG};;
+        c) container_util=${OPTARG};;
         \?)
-            echo "Invalid argument! Use -e for the etcd port and -m for the milvus port"
+            echo "Invalid argument! Use -e for the etcd port, -m for the milvus port, -c podman|docker to use podman (default) or docker."
             exit 1
             ;;
     esac
@@ -173,6 +175,6 @@ case $op in
         status
         ;;
     *)
-        echo "please use bash standalone_embed_ppc64le.sh start|stop|delete|status"
+        echo "please use bash standalone_embed_ppc64le.sh start|stop|delete|status [-e ETCD_PORT] [-m MILVUS_PORT] [-c podman|docker]"
         ;;
 esac
