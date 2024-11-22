@@ -2,11 +2,23 @@ techzone:
   hosts:
     techzone1:
   vars:
+    # common:
     ansible_user: user
-    auto_start: true
-    python_version: 3.11
-    working_directory: "/home/{{ ansible_user }}/milvus"
+    auto_start: true 
     milvus_port: 19530
-    milvus_etcd_port: 2379
-    micromamba_location: "/usr/local/bin/micromamba"
+    minio_port: 9091
+    etcd_port: 2379
+
+    # pymilvus
+    python_version: 3.11
     conda_dir: "/home/{{ ansible_user }}/micromamba"
+    micromamba_location: "/usr/local/bin/micromamba"
+
+    # podman-milvus
+    working_directory: "/home/{{ ansible_user }}/milvus"
+
+    # bare_metal
+    go_path: /usr/local/go
+    go_version: 1.23.3
+    cmake_version: 3.30.5
+    cmake_path: /usr/local/cmake

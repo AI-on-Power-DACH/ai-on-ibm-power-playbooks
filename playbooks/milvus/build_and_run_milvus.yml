@@ -1,0 +1,30 @@
+---
+- name: Install Build dependencies (milvus)
+  hosts: techzone
+  tasks:
+   - name: Install @Development tools
+     become: true
+     become_user: root
+     ansible.builtin.dnf:
+       name: '@Development tools'
+       state: present
+   - name: Install repo availible tooling
+     become: true
+     become_user: root
+     ansible.builtin.dnf:
+      name:
+      - git
+       - bison 
+
+# name: Patch & compile milvus
+# hosts: techzone
+# tasks:
+
+# name: Install etcd
+# hosts: techzone
+# tasks:
+#   - name: Donwload etcd
+
+# name: Remove Build dependencies (unsafe) 
+# hosts: techzone
+# tasks:

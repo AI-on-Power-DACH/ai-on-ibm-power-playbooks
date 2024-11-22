@@ -1,0 +1,22 @@
+# NOTE: requires go to be already installed (as is the case in baremetal-milvus)
+- name: 
+- name: Create etcd directory
+  ansible.builtin.command: mkdir -p ${etcd_location}
+- name: Download etcd
+  ansible.builtin.get_url:
+    url: "http://github.com/etcd-io/releases/download/${etcd_version}/etcd-${etcd_version}-linux-ppc64le.tar.gz"
+    dest: "${etcd_location}/etcd.tar.gz"
+- name: Decompress files
+  ansible.builtin.command:
+    argv:
+      - tar
+      - xvzf
+      - "${etcd_location}/etcd.tar.gz"
+      - -C
+      - "${etcd_location}"
+- name: Remove archive
+  ansible.builtin.command:
+    argv:
+      - rm
+      - -f
+      - "${etcd_location}/etcd.tar.gz"

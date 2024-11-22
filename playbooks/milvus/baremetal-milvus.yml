@@ -1,0 +1,16 @@
+---
+#
+#
+# Parameters:
+#   - remove_build_dependencies (bool): false
+#   - milvus_version (string): version of milvus to install
+#   - etcd_version (string): version of etcd to install
+#   - minio_version (string): version of minio to install
+#   - auto_start (bool): whether to automatically start milvus and it's required services.
+#
+- name: Install Minio
+  import_playbook: install_minio.yml
+- name: Install Etcd
+  import_playbook: install_etcd.yml
+- name: Install Milvus
+  import_playbook: install_and_run_milvus.yml
