@@ -1,0 +1,6 @@
+name: milvus_install
+channels:
+  - rocketce
+  - defaults
+dependencies:
+  - pip

@@ -2,13 +2,6 @@
 - name: Install Build Environment Required.
   hosts: techzone
   tasks:
-  #  - name: Test Path variable
-  #    ansible.builtin.shell:
-  #     # Condition with :<desired>: and extension ":$PATH:" to ensure the path is included and not part of a subpath
-  #     # enven when it appears in the end or beginning (adding leading & trailing :)
-  #     cmd: if [[ ":$PATH:" == *":{{ go_path }}:"* && ":$PATH:" == *":{{ cmake_path }}:"* ]]; echo "set"; fi
-  #    register: path_set
-  #    changed_when: false
 
    - name: Set Path
      become: true
@@ -22,90 +15,129 @@
       create: true
       mode: a=r,u=rw
 
-#    - name: Add yum Centos CRP repo
-#      become: true
-#      become_user: root
-#      ansible.builtin.yum_repository:
-#       name: CRB
-#       description: CRB repo. Added by ansible milvus install script.
-#       baseurl: https://mirror.stream.centos.org/9-stream/CRB/ppc64le/os
+   - name: Add yum Centos CRP repo
+     become: true
+     become_user: root
+     ansible.builtin.yum_repository:
+      name: CRB
+      description: CRB repo. Added by ansible milvus install script.
+      baseurl: https://mirror.stream.centos.org/9-stream/CRB/ppc64le/os
 
-#    - name: Add yum Centos AppStream repo
-#      become: true
-#      become_user: root
-#      ansible.builtin.yum_repository:
-#       name: AppStream
-#       description: AppStream repo. Added by ansible milvus install script.
-#       baseurl: https://mirror.stream.centos.org/9-stream/AppStream/ppc64le/os
+   - name: Add yum Centos AppStream repo
+     become: true
+     become_user: root
+     ansible.builtin.yum_repository:
+      name: AppStream
+      description: AppStream repo. Added by ansible milvus install script.
+      baseurl: https://mirror.stream.centos.org/9-stream/AppStream/ppc64le/os
 
-#    - name: Add yum Centos BaseOS repo
-#      become: true
-#      become_user: root
-#      ansible.builtin.yum_repository:
-#       name: BaseOS
-#       description: BaseOS repo. Added by ansible milvus install script.
-#       baseurl: https://mirror.stream.centos.org/9-stream/BaseOS/ppc64le/os
+   - name: Add yum Centos BaseOS repo
+     become: true
+     become_user: root
+     ansible.builtin.yum_repository:
+      name: BaseOS
+      description: BaseOS repo. Added by ansible milvus install script.
+      baseurl: https://mirror.stream.centos.org/9-stream/BaseOS/ppc64le/os
 
-#    - name: Import key
-#      ansible.builtin.rpm_key:
-#       state: present
-#       key: https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official
+   - name: Import key
+     ansible.builtin.rpm_key:
+      state: present
+      key: https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official
 
-#    - name: Install epel RPM
-#      become: true
-#      become_user: root
-#      ansible.builtin.dnf:
-#       name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-#       state: present
+   - name: Install epel RPM
+     become: true
+     become_user: root
+     ansible.builtin.dnf:
+      name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+      state: present
 
-#    - name: Install yum dependencies
-#      become: true
-#      become_user: root
-#      ansible.builtin.command: 
-#       cmd: >
-#        yum install -y --allowerasing  make wget git sudo curl zip unzip tar diffutils pkg-config python3-devel
-#        perl-IPC-Cmd perl-Digest-SHA perl-FindBin perl-File-Compare openssl-devel scl-utils openblas-devel rust
-#        cargo gcc gcc-c++ libstdc++-static which libaio libuuid-devel ncurses-devel ccache libtool m4 autoconf
-#        automake ninja-build zlib-devel libffi-devel gfortran yum-utils patchelf hdf5-devel sqlite-devel bzip2-devel
-#        xz-devel perl-open.noarch
+   - name: Install yum dependencies
+     become: true
+     become_user: root
+     ansible.builtin.command: 
+      cmd: >
+       yum install -y --allowerasing  make wget git sudo curl zip unzip tar diffutils pkg-config python3-devel
+       perl-IPC-Cmd perl-Digest-SHA perl-FindBin perl-File-Compare openssl-devel scl-utils openblas-devel rust
+       cargo gcc gcc-c++ libstdc++-static which libaio libuuid-devel ncurses-devel ccache libtool m4 autoconf
+       automake ninja-build zlib-devel libffi-devel gfortran yum-utils patchelf hdf5-devel sqlite-devel bzip2-devel
+       xz-devel perl-open.noarch
 
    - name: Create tmp dir
      ansible.builtin.tempfile:
       state: directory
      register: dload_dir
+  
 
-# # Go:
-#    - name: Check for go
-#      ansible.builtin.stat:
-#       path: "{{ go_path }}/bin/go"
-#      register: go_stat
+   - name: Install mamba and python dependencies
+     block:
+     - name: "Check if micromamba already exists in {{ micromamba_location }}"
+       ansible.builtin.stat:
+          path: "{{ micromamba_location }}"
+       register: mamba_stat
 
-#    - name: Download go
-#      ansible.builtin.get_url:
-#       url: https://go.dev/dl/go{{ go_version }}.linux-ppc64le.tar.gz
-#       decompress: true
-#       dest: "{{ dload_dir.path }}/go.tar.gz"
-#       mode: u+rw
-#      when: not go_stat.stat.exists
+     - name: Install micromamba
+       ansible.builtin.import_tasks: ../../download-and-extract-micromamba.yml
+       when: not mamba_stat.stat.exists
 
-#    - name: Extract go
-#      become: true
-#      become_user: root
-#      ansible.builtin.unarchive:
-#       dest: "{{ go_path | dirname }}"
-#       src: "{{ dload_dir.path }}/go.tar.gz"
-#       remote_src: true
-#       # cmd: tar xzf -C {{ go_path }} {{ dload_dir.path }}/go.tar.gz
-#      when: not go_stat.stat.exists
+     - name: Check install env
+       ansible.builtin.shell: 
+         cmd: micromamba env list | grep milvus_install | cut -f3 -d" "
+       register: mamba_install_env
 
-#    - name: Get Go Version
-#      ansible.builtin.command: go version
-#      register: go_version
-#      changed_when: false
+     - name: Copy env file
+       ansible.builtin.copy:
+          src: install-mamba-env.yml
+          dest: "{{ dload_dir.path }}/mamba-env-install.yml"
+       when: mamba_install_env.stdout != "milvus_install"
 
-#    - name: Print Go Version
-#      ansible.builtin.debug:
-#       msg: "{{ go_version.stdout }}"
+     - name: create python install env
+       ansible.builtin.command:
+          argv:
+            - micromamba
+            - create
+            - --yes
+            - -f
+            - "{{ dload_dir.path }}/mamba-env-install.yml"
+       when: mamba_install_env.stdout != "milvus_install"
+
+     - name: install python build dependencies
+       ansible.builtin.command:
+        cmd: micromamba run -n milvus_install pip install conan==1.64.1 setuptools==59.5.0
+       when: mamba_install_env.stdout != "milvus_install"
+
+
+# Go:
+   - name: Check for go
+     ansible.builtin.stat:
+      path: "{{ go_path }}/bin/go"
+     register: go_stat
+
+   - name: Download go
+     ansible.builtin.get_url:
+      url: https://go.dev/dl/go{{ go_version }}.linux-ppc64le.tar.gz
+      decompress: true
+      dest: "{{ dload_dir.path }}/go.tar.gz"
+      mode: u+rw
+     when: not go_stat.stat.exists
+
+   - name: Extract go
+     become: true
+     become_user: root
+     ansible.builtin.unarchive:
+      dest: "{{ go_path | dirname }}"
+      src: "{{ dload_dir.path }}/go.tar.gz"
+      remote_src: true
+      # cmd: tar xzf -C {{ go_path }} {{ dload_dir.path }}/go.tar.gz
+     when: not go_stat.stat.exists
+
+   - name: Get Go Version
+     ansible.builtin.command: go version
+     register: go_version
+     changed_when: false
+
+   - name: Print Go Version
+     ansible.builtin.debug:
+      msg: "{{ go_version.stdout }}"
 
 # cmake:
    - name: Install CMake 
@@ -150,7 +182,7 @@
         become_user: root
         ansible.builtin.shell:
           chdir: "{{ dload_dir.path }}/cmake-{{ cmake_version }}"
-          cmd: make install -j$(nproc)
+          cmd: micromamba activate milvus_install && make install -j$(nproc)
         when: current_cmake_version.stdout != cmake_version
 
       - name: Check cmake version
@@ -164,7 +196,6 @@
         ansible.builtin.debug:
           msg: "{{ new_cmake_version.stdout }}"
         when: current_cmake_version.stdout != cmake_version
-
 # Cleanup:
    - name: Remove tmpdir
      become: true
