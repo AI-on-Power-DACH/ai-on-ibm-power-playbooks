@@ -9,8 +9,8 @@
 #   - auto_start (bool): whether to automatically start milvus and it's required services.
 #
 - name: Install Minio
-  import_playbook: install_minio.yml
+  import_playbook: baremetal/install_minio.yml
 - name: Install Etcd
-  import_playbook: install_etcd.yml
+  import_playbook: baremetal/install_etcd.yml
 - name: Install Milvus
-  import_playbook: install_and_run_milvus.yml
+  import_playbook: baremetal/install_and_run_milvus.yml 
