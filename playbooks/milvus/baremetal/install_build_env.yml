@@ -8,7 +8,7 @@
      become_user: root
      ansible.builtin.lineinfile:
       dest: /etc/profile.d/path.sh
-      line: export PATH="$PATH:{{ go_path }}/bin:{{ cmake_path }}/bin"
+      line: export PATH="/usr/local/bin:$PATH:{{ go_path }}/bin:{{ cmake_path }}/bin"
       owner: root
       state: present
       insertafter: EOF
@@ -40,6 +40,8 @@
       baseurl: https://mirror.stream.centos.org/9-stream/BaseOS/ppc64le/os
 
    - name: Import key
+     become: true
+     become_user: root
      ansible.builtin.rpm_key:
       state: present
       key: https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official
@@ -48,8 +50,11 @@
      become: true
      become_user: root
      ansible.builtin.dnf:
-      name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+      name: 
+        - https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        - bzip2
       state: present
+
 
    - name: Install yum dependencies
      become: true
@@ -67,46 +72,53 @@
       state: directory
      register: dload_dir
   
+- name: Install mamba and python dependencies
+  hosts: techzone
+  tasks:
+  - name: "Check if micromamba already exists in {{ micromamba_location }}"
+    ansible.builtin.stat:
+      path: "{{ micromamba_location }}"
+    register: mamba_stat
 
-   - name: Install mamba and python dependencies
-     block:
-     - name: "Check if micromamba already exists in {{ micromamba_location }}"
-       ansible.builtin.stat:
-          path: "{{ micromamba_location }}"
-       register: mamba_stat
+  - name: Install micromamba
+    ansible.builtin.import_tasks: ../../download-and-extract-micromamba.yml
+    when: not mamba_stat.stat.exists
 
-     - name: Install micromamba
-       ansible.builtin.import_tasks: ../../download-and-extract-micromamba.yml
-       when: not mamba_stat.stat.exists
+  - name: Check install env
+    ansible.builtin.shell: 
+      cmd: micromamba env list | grep milvus_install | cut -f3 -d" "
+    register: mamba_install_env
 
-     - name: Check install env
-       ansible.builtin.shell: 
-         cmd: micromamba env list | grep milvus_install | cut -f3 -d" "
-       register: mamba_install_env
+  - name: Copy env file
+    ansible.builtin.copy:
+      src: install-mamba-env.yml
+      dest: "{{ dload_dir.path }}/mamba-env-install.yml"
+    when: mamba_install_env.stdout != "milvus_install"
 
-     - name: Copy env file
-       ansible.builtin.copy:
-          src: install-mamba-env.yml
-          dest: "{{ dload_dir.path }}/mamba-env-install.yml"
-       when: mamba_install_env.stdout != "milvus_install"
+  - name: create python install env
+    ansible.builtin.command:
+      argv:
+        - micromamba
+        - create
+        - --root-prefix 
+        - "{{ conda_dir }}"
+        - --yes
+        - -f
+        - "{{ dload_dir.path }}/mamba-env-install.yml"
+    when: mamba_install_env.stdout != "milvus_install"
 
-     - name: create python install env
-       ansible.builtin.command:
-          argv:
-            - micromamba
-            - create
-            - --yes
-            - -f
-            - "{{ dload_dir.path }}/mamba-env-install.yml"
-       when: mamba_install_env.stdout != "milvus_install"
+  - name: install python build dependencies
+    ansible.builtin.command:
+      cmd: micromamba run --root-prefix {{ conda_dir }} -n milvus_install pip install conan==1.64.1 setuptools==59.5.0
+    when: mamba_install_env.stdout != "milvus_install"
 
-     - name: install python build dependencies
-       ansible.builtin.command:
-        cmd: micromamba run -n milvus_install pip install conan==1.64.1 setuptools==59.5.0
-       when: mamba_install_env.stdout != "milvus_install"
+  vars:
+    arch: linux-ppc64le
+    version: latest
 
-
-# Go:
+- name: Install go 
+  hosts: techzone
+  tasks:
    - name: Check for go
      ansible.builtin.stat:
       path: "{{ go_path }}/bin/go"
@@ -139,69 +151,74 @@
      ansible.builtin.debug:
       msg: "{{ go_version.stdout }}"
 
+- name: Install (compile) cmake
+  hosts: techzone
 # cmake:
-   - name: Install CMake 
-     block:
-      - name: Check vor correct cmake version
-        ansible.builtin.shell:
-          cmd: cmake --version | head -n1 | cut -f3 -d" "
-        failed_when: false
-        changed_when: false
-        register: current_cmake_version
+  tasks:
+  - name: Check for correct cmake version
+    ansible.builtin.shell:
+      cmd: cmake --version | head -n1 | cut -f3 -d" "
+    failed_when: false
+    changed_when: false
+    register: current_cmake_version
 
-      - name: Print current version
-        ansible.builtin.debug:
-          msg: "{{ current_cmake_version.stdout }}"
+  - name: Print current version
+    ansible.builtin.debug:
+      msg: "{{ current_cmake_version.stdout }}"
 
-      - name: Download cmake {{ cmake_version }}
-        ansible.builtin.get_url:
-          url: https://github.com/Kitware/CMake/releases/download/v{{ cmake_version }}/cmake-{{ cmake_version }}.tar.gz
-          dest: "{{ dload_dir.path }}/cmake.tar.gz"
-          mode: u+rw
-        when: current_cmake_version.stdout != cmake_version
+  - name: Download cmake {{ cmake_version }}
+    ansible.builtin.get_url:
+      url: https://github.com/Kitware/CMake/releases/download/v{{ cmake_version }}/cmake-{{ cmake_version }}.tar.gz
+      dest: "{{ dload_dir.path }}/cmake.tar.gz"
+      mode: u+rw
+    when: current_cmake_version.stdout != cmake_version
 
-      - name: Extract cmake
-        become: true
-        become_user: root
-        ansible.builtin.unarchive:
-          src: "{{ dload_dir.path }}/cmake.tar.gz"
-          dest: "{{ dload_dir.path }}"
-          remote_src: true
-        when: current_cmake_version.stdout != cmake_version
+  - name: Extract cmake
+    become: true
+    become_user: root
+    ansible.builtin.unarchive:
+      src: "{{ dload_dir.path }}/cmake.tar.gz"
+      dest: "{{ dload_dir.path }}"
+      remote_src: true
+    when: current_cmake_version.stdout != cmake_version
 
-      - name: Run cmake bootstrap
-        become: true
-        become_user: root
-        ansible.builtin.shell:
-          cmd: ./bootstrap --prefix={{ cmake_path }} --parallel=$(nproc) -- -DBUILD_TESTING:BOOL=OFF -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_USE_OPENSSL:BOOL=ON
-          chdir: "{{ dload_dir.path }}/cmake-{{ cmake_version }}"
-        when: current_cmake_version.stdout != cmake_version
+  - name: Run cmake bootstrap
+    become: true
+    become_user: root
+    ansible.builtin.shell:
+      cmd: ./bootstrap --prefix={{ cmake_path }} --parallel=$(nproc) -- -DBUILD_TESTING:BOOL=OFF -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_USE_OPENSSL:BOOL=ON
+      chdir: "{{ dload_dir.path }}/cmake-{{ cmake_version }}"
+    when: current_cmake_version.stdout != cmake_version
 
-      - name: Build and install cmake {{ cmake_version }}
-        become: true
-        become_user: root
-        ansible.builtin.shell:
-          chdir: "{{ dload_dir.path }}/cmake-{{ cmake_version }}"
-          cmd: micromamba activate milvus_install && make install -j$(nproc)
-        when: current_cmake_version.stdout != cmake_version
+  - name: Build and install cmake {{ cmake_version }}
+    become: true
+    become_user: root
+    ansible.builtin.shell:
+      chdir: "{{ dload_dir.path }}/cmake-{{ cmake_version }}"
+      # full paths since the root shell (using /bin/sh) does not parse /etc/profile.d/
+      cmd: "{{ micromamba_location }} run -n milvus_install --root-prefix {{ conda_dir }} make install -j$(nproc)"
+    when: current_cmake_version.stdout != cmake_version
 
-      - name: Check cmake version
-        ansible.builtin.command: 
-          cmd: cmake --version | head -1 | cut -f3 -d" "
-        changed_when: false
-        register: new_cmake_version
-        when: current_cmake_version.stdout != cmake_version
+  - name: Check cmake version
+    ansible.builtin.command: 
+      cmd: cmake --version | head -1 | cut -f3 -d" "
+    changed_when: false
+    register: new_cmake_version
+    when: current_cmake_version.stdout != cmake_version
 
-      - name: Print cmake version
-        ansible.builtin.debug:
-          msg: "{{ new_cmake_version.stdout }}"
-        when: current_cmake_version.stdout != cmake_version
+  - name: Print cmake version
+    ansible.builtin.debug:
+      msg: "{{ new_cmake_version.stdout }}"
+    when: current_cmake_version.stdout != cmake_version
 # Cleanup:
-   - name: Remove tmpdir
-     become: true
-     become_user: root
-     ansible.builtin.file:
-       path: "{{ dload_dir.path }}"
-       state: absent
-     when: dload_dir.path is defined
-     
+- name: Cleanup
+  hosts: techzone
+  tasks:
+  - name: Remove tmpdir
+    become: true
+    become_user: root
+    ansible.builtin.file:
+      path: "{{ dload_dir.path }}"
+      state: absent
+    when: dload_dir.path is defined
+      

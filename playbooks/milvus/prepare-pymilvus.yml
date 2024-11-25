@@ -28,6 +28,11 @@
           - bzip2
       when: not dest_stat.stat.exists
 
+    - name: Check Working dir
+      ansible.builtin.file:
+        path: "{{ working_directory }}"
+        state: directory
+
     - name: Install micromamba
       ansible.builtin.import_tasks: ../download-and-extract-micromamba.yml
       when: not dest_stat.stat.exists
@@ -36,6 +41,7 @@
       ansible.builtin.copy:
         src: ./mamba-env-pymilvus.yml
         dest: "{{ working_directory }}/mamba-env-pymilvus.yml"
+        mode: a=r
 
     - name: Create milvus environment
       ansible.builtin.command:

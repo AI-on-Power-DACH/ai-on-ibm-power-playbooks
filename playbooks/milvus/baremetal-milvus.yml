@@ -5,9 +5,11 @@
 #   - remove_build_dependencies (bool): false
 #   - milvus_version (string): version of milvus to install
 #   - etcd_version (string): version of etcd to install
-#   - minio_version (string): version of minio to install
+#   - etcd_executable_prefix (string): path to dir under which etcd executables should live.
 #   - auto_start (bool): whether to automatically start milvus and it's required services.
 #
+- name: Prepare Build env
+  import_playbook: baremetal/install_build_env.yml
 - name: Install Minio
   import_playbook: baremetal/install_minio.yml
 - name: Install Etcd

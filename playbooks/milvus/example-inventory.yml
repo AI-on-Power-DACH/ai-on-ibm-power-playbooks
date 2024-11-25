@@ -21,4 +21,7 @@ techzone:
     go_path: /usr/local/go
     go_version: 1.23.3
     cmake_version: 3.30.5
+    etcd_version: 3.5.17
+
     cmake_path: /usr/local/cmake
+    etcd_executable_prefix: /usr/local/bin
