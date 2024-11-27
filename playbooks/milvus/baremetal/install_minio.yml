@@ -1,7 +1,17 @@
+# Installs Minio onto the 
+#
+#
 ---
 - name: Install Minio
   hosts: techzone
   tasks:
-  - name: Debug
-    ansible.builtin.debug:
-      msg: TODO
+  # NOTE: could also be installed using dnf however the versioning of minio is very intransparent...
+  #       this will install the latest version regardless.
+  - name: Download Minio binary
+    become: true
+    become_user: root
+    ansible.builtin.get_url:
+      url: https://dl.min.io/server/minio/release/linux-ppc64le/minio
+      dest: "{{ minio_location }}"
+      mode: u+x
+      owner: "{{ ansible_user }}"

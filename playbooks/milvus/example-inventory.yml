@@ -25,3 +25,4 @@ techzone:
 
     cmake_path: /usr/local/cmake
     etcd_executable_prefix: /usr/local/bin
+    minio_location: /usr/local/bin/minio
