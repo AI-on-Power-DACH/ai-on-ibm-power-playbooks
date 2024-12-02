@@ -4,13 +4,13 @@
   hosts: techzone
   tasks:
   - name: Create etcd executable directory
-    ansible.builtin.file: 
+    ansible.builtin.file:
       path: "{{ etcd_executable_prefix }}"
       state: directory
-  
+
   - name: Create temp dir
     ansible.builtin.tempfile:
-      state: directory 
+      state: directory
     register: dload_dir
 
   - name: Download etcd
@@ -46,7 +46,7 @@
     become: true
     become_user: root
     ansible.builtin.copy:
-     src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdctl" 
+     src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdctl"
      dest: "{{ etcd_executable_prefix }}/etcdctl"
      remote_src: true
      mode: u=rx,g=r,o=r
@@ -57,7 +57,7 @@
     become: true
     become_user: root
     ansible.builtin.copy:
-     src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdutl" 
+     src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdutl"
      dest: "{{ etcd_executable_prefix }}/etcdutl"
      remote_src: true
      mode: u=rx,g=r,o=r

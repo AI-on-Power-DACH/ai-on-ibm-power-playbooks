@@ -58,7 +58,7 @@ EOF
         --health-start-period=90s \
         --health-timeout=20s \
         --health-retries=3 \
-        quay.io/mgiessing/milvus:v2.3.1 \
+        quay.io/mmielimonka/milvus:latest \
         milvus run standalone  1> /dev/null
 }
 

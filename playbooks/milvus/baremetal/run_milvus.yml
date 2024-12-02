@@ -1,0 +1,10 @@
+# Runs a local milvus install by first starting minio & etcd and then milvus.
+#
+# Parameters:
+---
+- name: Start Etcd
+  hosts: techzone
+  tasks:
+    - name: Todo
+      ansible.builtin.debug:
+        msg: TODO

@@ -1,7 +1,0 @@
----
-- name: Install Milvus
-  hosts: techzone
-  tasks:
-  - name: Debug
-    ansible.builtin.debug:
-      msg: TODO

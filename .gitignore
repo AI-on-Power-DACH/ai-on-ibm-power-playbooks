@@ -13,3 +13,9 @@ __pycache__/
 # inventory
 inventory.yml
 inventory.ini
+
+# local ansible configs:
+ansible.cfg
+
+# log files:
+*.log

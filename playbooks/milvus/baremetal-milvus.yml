@@ -1,4 +1,3 @@
----
 #
 #
 # Parameters:
@@ -8,11 +7,15 @@
 #   - etcd_executable_prefix (string): path to dir under which etcd executables should live.
 #   - auto_start (bool): whether to automatically start milvus and it's required services.
 #
+---
 - name: Prepare Build env
-  import_playbook: baremetal/install_build_env.yml
+  ansible.builtin.import_playbook: baremetal/install_build_env.yml
 - name: Install Minio
-  import_playbook: baremetal/install_minio.yml
+  ansible.builtin.import_playbook: baremetal/install_minio.yml
 - name: Install Etcd
-  import_playbook: baremetal/install_etcd.yml
+  ansible.builtin.import_playbook: baremetal/install_etcd.yml
 - name: Install Milvus
-  import_playbook: baremetal/install_and_run_milvus.yml 
+  ansible.builtin.import_playbook: baremetal/build_milvus.yml
+- name: Start Milvus
+  ansible.builtin.import_playbook: baremetal/run_milvus.yml
+  when: auto_start
