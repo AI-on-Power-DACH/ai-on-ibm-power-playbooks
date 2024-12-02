@@ -142,7 +142,7 @@
         uvicorn_args: ""
       when: uvicorn_args is not defined
 
-    - name: Default llama.cpp parameter list (--)
+    - name: Default uvicorn parameter list (--)
       ansible.builtin.set_fact:
         uvicorn_argv: "--host 0.0.0.0 --port 8080"
       when: uvicorn_argv is not defined
