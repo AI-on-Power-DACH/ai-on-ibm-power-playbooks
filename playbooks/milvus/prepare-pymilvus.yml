@@ -48,14 +48,19 @@
         argv:
           - micromamba
           - create
+          - --root-prefix
+          - "{{ conda_dir }}"
           - --yes
           - -f 
           - "{{ working_directory}}/mamba-env-pymilvus.yml" 
 
     - name: Remove env file
-      ansible.builtin.command:
-        cmd: rm ./mamba-env-pymilvus.yml
-        chdir: "{{ working_directory }}"
+      ansible.builtin.file:
+       path: "{{ working_directory }}/mamba-env-pymilvus.yml"
+       state: absent
+      # ansible.builtin.command:
+      #   cmd: rm ./mamba-env-pymilvus.yml
+      #   chdir: "{{ working_directory }}"
 
     - name: Test For ROOT_PREFIX
       ansible.builtin.command:
@@ -79,7 +84,8 @@
         argv:
           - micromamba
           - run
-          - --root-prefix={{ conda_dir }}
+          - --root-prefix
+          - "{{ conda_dir }}"
           - -n
           - milvus
           - pip

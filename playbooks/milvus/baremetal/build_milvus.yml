@@ -2,85 +2,106 @@
 - name: Install Milvus
   hosts: techzone
   tasks:
-   - name: Create Temp dir
-     ansible.builtin.tempfile:
+  #  - name: Create Temp dir
+  #    ansible.builtin.tempfile:
+  #     state: directory
+  #    register: dload_dir
+   - name: Create Milvus directory
+     ansible.builtin.file:
+      path: "{{ milvus_dir }}/"
       state: directory
-     register: dload_dir
+      mode: 755
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+
+   - name: Set permissions for milvus dir # somehow mode 755 in ansible is not readable?
+     become: true
+     become_user: root
+     ansible.builtin.command:
+      cmd: chmod 755 {{ milvus_dir }}
+
+   - name: Get Existing milvus Download
+     ansible.builtin.stat:
+      path: "{{ milvus_dir }}/gitrepo"
+     register: milvus_stat
+
 
    - name: Download Milvus Source
      ansible.builtin.git:
       repo: https://github.com/milvus-io/milvus.git
       single_branch: true
       version: v{{ milvus_version }}
-      dest: "{{ dload_dir.path }}/milvus"
+      dest: "{{ milvus_dir }}/gitrepo"
+     when: not milvus_stat.stat.exists
 
    - name: Download milvus patch
      ansible.builtin.get_url:
       url: https://raw.githubusercontent.com/ppc64le/build-scripts/master/m/milvus/milvus-v{{ milvus_patch_version }}.patch
-      dest: "{{ dload_dir.path }}/milvus.patch"
+      dest: "{{ milvus_dir }}/milvus.patch"
       mode: u+rw
       owner: "{{ ansible_user }}"
+     when: not milvus_stat.stat.exists
 
    - name: Apply patch
      ansible.builtin.command:
       cmd: git apply ../milvus.patch
-      chdir: "{{ dload_dir.path }}/milvus"
+      chdir: "{{ milvus_dir }}/gitrepo"
+     when: not milvus_stat.stat.exists
 
    # NOTE: Apply MCPU not yet supported (was defaulting to false anyways.)
    # Requires milvus_install micromamba environment
 
    - name: Run Build
      ansible.builtin.shell:
-      cmd: micromamba run --root-prefix={{ conda_dir }} -n milvus_install make -j$(nproc)
-      chdir: "{{ dload_dir.path }}/milvus"
+      cmd: micromamba run --root-prefix={{ conda_dir }} -n milvus_install make -j{{ nproc }}
+      chdir: "{{ milvus_dir }}/gitrepo"
      register: build_command
      failed_when: false
 
    - name: Patch rust crates
-     when: build_command.rc != 0 
-     ansible.builtin.shell: 
+     when: build_command.rc != 0
+     ansible.builtin.shell:
       cmd: cargo update -p time
-      chdir: "{{ dload_dir.path }}/milvus/internal/core/thirdparty/tantivy/tantivy-binding/"
+      chdir: "{{ milvus_dir }}/gitrepo/internal/core/thirdparty/tantivy/tantivy-binding/"
 
    - name: Rerun Build
      ansible.builtin.shell:
       # NOTE: This is a quite extensive build process. Increasing memory helps. Running to many cores results in make getting killed
       #       by the OOM killer :).
-      cmd: micromamba run --root-prefix={{ conda_dir }} -n milvus_install make -j10
-      chdir: "{{ dload_dir.path }}/milvus"
+      cmd: micromamba run --root-prefix={{ conda_dir }} -n milvus_install make -j{{ nproc }}
+      chdir: "{{ milvus_dir }}/gitrepo"
      when: build_command.rc != 0
 
-   - name: Create Milvus directory
-     ansible.builtin.file:
-      path: "{{ milvus_dir }}"
-      state: present
-      mode: u=rw,o=r,a=r
 
    - name: Copy Binaries
      ansible.builtin.copy:
-      src: "{{ dlaod_dir.path }}/milvus/bin/"
+      src: "{{ milvus_dir }}/gitrepo/bin/"
       dest: "{{ milvus_dir }}/bin/"
+      remote_src: true
       mode: u+x
 
    - name: Copy Configs
      ansible.builtin.copy:
-      src: "{{ dlaod_dir.path }}/milvus/configs/"
+      src: "{{ milvus_dir }}/gitrepo/configs/"
       dest: "{{ milvus_dir }}/configs/"
+      remote_src: true
       mode: u+x
 
    - name: Copy Libraries (64bit)
      ansible.builtin.copy:
-      src: "{{ dlaod_dir.path }}/milvus/internal/core/output/lib64/"
+      src: "{{ milvus_dir }}/gitrepo/internal/core/output/lib64/"
       dest: "{{ milvus_dir }}/lib/"
+      remote_src: true
       mode: u+rx
 
    - name: Copy Libraries
      ansible.builtin.copy:
-      src: "{{ dlaod_dir.path }}/milvus/internal/core/output/lib/"
+      src: "{{ milvus_dir }}/gitrepo/internal/core/output/lib/"
       dest: "{{ milvus_dir }}/lib/"
+      remote_src: true
       mode: u+rx
 
-   - name: Remove Temp dir
-     ansible.builtin.file:
-      path: "{{ dload_dir.path }}"
-      state: absent
+  #  - name: Remove Temp dir
+  #    ansible.builtin.file:
+  #     path: "{{ dload_dir.path }}"
+  #     state: absent

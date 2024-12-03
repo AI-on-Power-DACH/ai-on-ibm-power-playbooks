@@ -3,20 +3,35 @@
 - name: Install Etcd
   hosts: techzone
   tasks:
+
+  - name: Check current etcd installation
+    ansible.builtin.shell:
+     cmd: set -o pipefail && etcd --version | head -n1 | cut -d" " -f3
+    register: etcd_curr_version
+    failed_when: false
+    changed_when: false
+  
+  - name: Print Currrent Etcd Version
+    ansible.builtin.debug:
+      msg: "Current version: {{ etcd_curr_version.stdout }}"
+
   - name: Create etcd executable directory
     ansible.builtin.file:
       path: "{{ etcd_executable_prefix }}"
       state: directory
+    when: etcd_curr_version.stdout != etcd_version
 
   - name: Create temp dir
     ansible.builtin.tempfile:
       state: directory
     register: dload_dir
+    when: etcd_curr_version.stdout != etcd_version
 
   - name: Download etcd
     ansible.builtin.get_url:
       url: "https://github.com/etcd-io/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-ppc64le.tar.gz"
       dest: "{{ dload_dir.path }}/etcd.tar.gz"
+    when: etcd_curr_version.stdout != etcd_version
 
   # - name: Decompress files
   #   ansible.builtin.command:
@@ -31,6 +46,7 @@
       src: "{{ dload_dir.path }}/etcd.tar.gz"
       dest: "{{ dload_dir.path }}"
       remote_src: true
+    when: etcd_curr_version.stdout != etcd_version
 
   - name: Copy etcd executable
     become: true
@@ -41,6 +57,7 @@
      remote_src: true
      mode: u=rx,g=r,o=r
      owner: "{{ ansible_user }}"
+    when: etcd_curr_version.stdout != etcd_version
 
   - name: Copy etcdctl executable
     become: true
@@ -51,6 +68,7 @@
      remote_src: true
      mode: u=rx,g=r,o=r
      owner: "{{ ansible_user }}"
+    when: etcd_curr_version.stdout != etcd_version
 
 
   - name: Copy etcdutl executable
@@ -62,6 +80,7 @@
      remote_src: true
      mode: u=rx,g=r,o=r
      owner: "{{ ansible_user }}"
+    when: etcd_curr_version.stdout != etcd_version
 
   # - name: Remove archive
   #   ansible.builtin.command:
@@ -75,3 +94,4 @@
     ansible.builtin.file:
       path: "{{ dload_dir }}"
       state: absent
+    when: etcd_curr_version.stdout != etcd_version

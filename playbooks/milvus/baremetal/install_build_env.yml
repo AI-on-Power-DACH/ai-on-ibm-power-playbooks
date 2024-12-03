@@ -8,7 +8,7 @@
      become_user: root
      ansible.builtin.lineinfile:
       dest: /etc/profile.d/milvus_env.sh
-      line: export PATH="/usr/local/bin:$PATH:{{ go_path }}/bin:{{ cmake_path }}/bin:{{ micromamba_location }}"
+      line: export PATH="/usr/local/bin:$PATH:{{ go_path }}/bin:{{ cmake_path }}/bin:{{ micromamba_location }}:{{ milvus_dir }}/bin"
       owner: root
       state: present
       insertafter: EOF
