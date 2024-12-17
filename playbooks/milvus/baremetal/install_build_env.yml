@@ -223,6 +223,7 @@
      ansible.builtin.shell:
       cmd: set -o pipefail && cmake --version | head -1 | cut -f3 -d" "
      changed_when: false
+     failed_when: false
      register: cmake_curr_version
 
    - name: Download cmake {{ cmake_version }}

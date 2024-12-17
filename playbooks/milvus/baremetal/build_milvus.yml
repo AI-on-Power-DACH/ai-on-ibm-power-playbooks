@@ -71,6 +71,9 @@
       cmd: micromamba run --root-prefix={{ conda_dir }} -n milvus_install make -j{{ nproc }}
       chdir: "{{ milvus_dir }}/gitrepo"
      when: build_command.rc != 0
+     register: build_res
+     retries: 5
+     until: build_res.rc == 0
 
 
    - name: Copy Binaries

@@ -22,9 +22,12 @@ techzone:
     go_version: 1.23.3
     cmake_version: 3.30.5
     etcd_version: 3.5.17
+    etcd_data_dir: "{{ milvus_dir }}/etcd_data"
+    minio_data_dir: "{{ milvus_dir}}/minio_data"
     milvus_version: 2.4.16
     milvus_patch_version: 2.4.11
     milvus_dir: "/home/{{ ansible_user }}/milvus"
+    nproc: 32 # ca. nproc/4 to reduce likelyhood of oom-kills of the build process.
 
     cmake_path: /usr/local/cmake
     etcd_executable_prefix: /usr/local/bin

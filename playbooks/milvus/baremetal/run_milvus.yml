@@ -2,9 +2,57 @@
 #
 # Parameters:
 ---
-- name: Start Etcd
+- name: Run etcd, minio & milvus
   hosts: techzone
   tasks:
-    - name: Todo
-      ansible.builtin.debug:
-        msg: TODO
+    # - name: Create Minio Data dir
+    #   ansible.builtin.file:
+    #     state: directory
+    #     path: "{{ minio_data_dir }}"
+    #     recurse: true
+    #     mode: u=rwx,g=rw
+
+    # - name: Create Etcd Data dir
+    #   ansible.builtin.file:
+    #     state: directory
+    #     path: "{{ etcd_data_dir }}"
+    #     recurse: true
+    #     mode: u=rwx,g=rw
+
+    # - name: Upload Etcd Config
+    #   ansible.builtin.copy:
+    #     src: etcd_milvus_config.yaml
+    #     dest: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
+    #     mode: u=rw,g=r,o=r
+
+    # - name: Replace Etcd Port variable in config
+    #   ansible.builtin.replace:
+    #     path: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
+    #     regexp: "%{ etcd_port }%"
+    #     replace: "{{ etcd_port }}"
+
+    - name: Write Start script
+      ansible.builtin.shell: 
+        cmd: echo -e "
+          export ETCD_DATA_DIR={{ etcd_data_dir }} \n
+          export ETCD_USE_EMBED=true \n
+          export ETCD_CONFIG_PATH={{ milvus_dir }}/configs/etcd_milvus_config.yaml \n
+          export COMMON_STORAGETYPE=local \n
+          export MALLOC_CONF=background_thread:true\n
+          export LD_PRELOAD={{ milvus_dir }}/lib/libjemalloc.so.2\n
+          nohup minio server {{ minio_data_dir }} > minio.log &\n
+          nohup {{ milvus_dir }}/bin/milvus run standalone > milvus.log & \n
+          " > start_etcd.sh && chmod 755 ./start_etcd.sh
+        chdir: "{{ milvus_dir }}"
+      environment:
+        ETCD_USE_EMBED: false
+        ETCD_DATA_DIR: "{{ etcd_data_dir }}"
+        ETCD_CONFIG_PATH: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
+        COMMON_STORAGETYPE: local
+
+    - name: Start Services
+      become: true
+      become_user: root
+      ansible.builtin.shell:
+        cmd: ./start_etcd.sh
+        chdir: "{{ milvus_dir }}"
