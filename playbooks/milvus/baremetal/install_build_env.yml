@@ -1,3 +1,22 @@
+# Installs all tools required to build milvus and install etcd as well as minio
+#
+# This playbook will install go, cmake, micromamba and create a milvus_install environment in micromamba.
+# The build_milvus playbook will use all of these tools and assume their existance at the correct paths.
+# After milvus was build successfully none of these tools are required and could be removed.
+#
+# Parameters
+# - go_path (str/path): The path for the go directory (includes the bin/ subdir)
+# - go_version (str): the version of go to install
+#
+# - cmake_path (str/path): The path to all cmake files after building (including the bin/ subdir)
+# - cmake_version (str): The version of cmake to install (MUST be compatible with milvus!)
+#
+# - micromamba_location (str/path): The micromamba directory path (the binary lives directly in here)
+# - conda_dir (str/path): The path for all conda (= micromamba) environments (MAMBA_ROOT_PREFIX)
+#
+# - milvus_dir (str/path):    The directory in which milvus will be build and all its files will be located.
+# - ansible_user (str): The user which executes these playbooks (remote) and then runs milvus
+#
 ---
 - name: Install Build Environment Required.
   hosts: techzone
@@ -23,18 +42,6 @@
       line: export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib:{{ milvus_dir }}/lib"
       owner: root
       state: present
-      insertafter: EOF
-      create: true
-      mode: a=r,u=rw
-
-   - name: Set LD Preload path
-     become: true
-     become_user: root
-     ansible.builtin.lineinfile:
-      dest: /etc/profile.d/milvus_env.sh
-      line: export LD_PRELOAD="{{ milvus_dir }}/lib/libjemalloc.so"
-      owner: root
-      state: absent
       insertafter: EOF
       create: true
       mode: a=r,u=rw
@@ -170,7 +177,7 @@
        - "{{ dload_dir.path }}/mamba-env-install.yml"
      when: mamba_install_env.stdout != "milvus_install"
 
-   - name: install python build dependencies
+   - name: Install python build dependencies
      ansible.builtin.command:
       cmd: micromamba run --root-prefix {{ conda_dir }} -n milvus_install pip install conan==1.64.1 setuptools==59.5.0
      when: mamba_install_env.stdout != "milvus_install"
@@ -202,7 +209,6 @@
       dest: "{{ go_path | dirname }}"
       src: "{{ dload_dir.path }}/go.tar.gz"
       remote_src: true
-      # cmd: tar xzf -C {{ go_path }} {{ dload_dir.path }}/go.tar.gz
      when: not go_stat.stat.exists
 
    - name: Get Go Version
@@ -216,6 +222,7 @@
 
 - name: Install (compile) cmake
   hosts: techzone
+
 # cmake:
   tasks:
 
@@ -295,16 +302,13 @@
          dest: "{{ cmake_path }}/conanfile.py"
          mode: u=rx,g=r,o=r
 
-     #  - name: Insert cmake version into template conan file
-     #    ansible.builtin.command:
-     #     cmd: sed -i -e "s/%{ cmake_version }%/{{ cmake_version }}/g" {{ dload_dir.path }}/cmake-{{ cmake_version }}/conanfile.py
-
       - name: Insert cmake version into template
         ansible.builtin.replace:
          path: "{{ cmake_path }}/conanfile.py"
          regexp: "%{ cmake_version }%"
          replace: "{{ cmake_version }}"
 
+      # since conan is a python tool, this must run in the milvus_install conda env:
       - name: Register cmake with conan
         ansible.builtin.command:
          chdir: "{{ cmake_path }}"
@@ -324,7 +328,7 @@
           - arch=ppc64le
           - -f
 
-      - name: Upadte libstd c++ version in use
+      - name: Upadte libstd c++ version for conan
         ansible.builtin.command:
          argv:
           - micromamba

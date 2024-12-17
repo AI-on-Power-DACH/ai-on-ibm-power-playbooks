@@ -1,11 +1,13 @@
-# Installs Minio onto the 
+# Installs the Minio binary
 #
-#
+# Parameters:
+# - minio_location (str/path):  the direct path of the minio binary (NO DIRECTORY)
+# - ansible_user (str):         The user running ansible / also the user who runs milvus in the end.
 ---
 - name: Install Minio
   hosts: techzone
   tasks:
-  # NOTE: could also be installed using dnf however the versioning of minio is very intransparent...
+  # NOTE: could also be installed using dnf however the versioning of minio is not semantic ...
   #       this will install the latest version regardless.
    - name: Download Minio binary
      become: true

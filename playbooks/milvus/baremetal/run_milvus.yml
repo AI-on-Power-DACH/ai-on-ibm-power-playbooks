@@ -1,6 +1,22 @@
 # Runs a local milvus install by first starting minio & etcd and then milvus.
 #
-# Parameters:
+# Parameters
+# - minio_data_dir (str/str): The directory for minio to store its data in
+# - etcd_data_dir (str/path): Same for etcd
+# - milvus_dir:               The directory in which milvus was build and lives contains configs/, lib/, bin/
+#                             Here all logs will also be stored.
+# - ansible_user:             The user for ansible / the user which will run the milvus service.
+# - etcd_port:                The port to use for etcd.
+#
+# Log files
+# All logs can be live watched using `tail -f {{ log_file }}`
+# - {{ milvus_dir }}/minio.log:   The log for minio
+# - {{ milvus_dir }}/milvus.log:  The log for milvs
+#
+# Stopping Milvus
+#
+# To stop Milvus (includes etcd) and minio, just send them a kill signal, e.g. `killall milvus; killall minio`.
+
 ---
 - name: Run etcd, minio & milvus
   hosts: techzone
@@ -31,6 +47,17 @@
         regexp: "%{ etcd_port }%"
         replace: "{{ etcd_port }}"
 
+    - name: Create milvus data library directory
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: /var/lib/milvus
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: u=rwx,g=rwx,o=r
+
+    # required when running milvus as non-root,
+    # run in case /var/lib/milvus already exists.
     - name: Chown milvus library files
       become: true
       become_user: root
@@ -44,6 +71,7 @@
         owner: "{{ ansible_user }}"
         mode: u=rwx,g=rwx,o=r
 
+    # This is easier than copying and repeatedly replacing in a file.
     - name: Write Start script
       ansible.builtin.shell:
         cmd: echo -e "

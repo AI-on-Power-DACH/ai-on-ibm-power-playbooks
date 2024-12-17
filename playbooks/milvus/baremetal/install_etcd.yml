@@ -1,97 +1,89 @@
-# NOTE: requires go to be already installed (as is the case in baremetal-milvus)
+# Install etcd
+#
+# NOTE: requires go to be already installed (as is the case in baremetal-milvus, when the install_build_env playbook
+#       is run beforehand).
+#
+# Parameters
+# - etcd_version (str):   The version of etcd to install
+# - etcd_executable_prefix (str/path): The directory in which the etcd binaries should live (must be in $PATH)
+# - ansible_user (str):    The user which is used by ansible and will run milvus
+#
 ---
 - name: Install Etcd
   hosts: techzone
   tasks:
 
-  - name: Check current etcd installation
-    ansible.builtin.shell:
-     cmd: set -o pipefail && etcd --version | head -n1 | cut -d" " -f3
-    register: etcd_curr_version
-    failed_when: false
-    changed_when: false
-  
-  - name: Print Currrent Etcd Version
-    ansible.builtin.debug:
+   - name: Check current etcd installation
+     ansible.builtin.shell:
+      cmd: set -o pipefail && etcd --version | head -n1 | cut -d" " -f3
+     register: etcd_curr_version
+     failed_when: false
+     changed_when: false
+
+   - name: Print Currrent Etcd Version
+     ansible.builtin.debug:
       msg: "Current version: {{ etcd_curr_version.stdout }}"
 
-  - name: Create etcd executable directory
-    ansible.builtin.file:
+   - name: Create etcd executable directory
+     ansible.builtin.file:
       path: "{{ etcd_executable_prefix }}"
       state: directory
-    when: etcd_curr_version.stdout != etcd_version
+     when: etcd_curr_version.stdout != etcd_version
 
-  - name: Create temp dir
-    ansible.builtin.tempfile:
+   - name: Create temp dir
+     ansible.builtin.tempfile:
       state: directory
-    register: dload_dir
-    when: etcd_curr_version.stdout != etcd_version
+     register: dload_dir
+     when: etcd_curr_version.stdout != etcd_version
 
-  - name: Download etcd
-    ansible.builtin.get_url:
+   - name: Download etcd
+     ansible.builtin.get_url:
       url: "https://github.com/etcd-io/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-ppc64le.tar.gz"
       dest: "{{ dload_dir.path }}/etcd.tar.gz"
-    when: etcd_curr_version.stdout != etcd_version
+     when: etcd_curr_version.stdout != etcd_version
 
-  # - name: Decompress files
-  #   ansible.builtin.command:
-  #     argv:
-  #       - tar
-  #       - xvzf
-  #       - "{{ etcd_location }}/etcd.tar.gz"
-  #       - -C
-  #       - "{{ etcd_location }}"
-  - name: Decompress files
-    ansible.builtin.unarchive:
+   - name: Decompress files
+     ansible.builtin.unarchive:
       src: "{{ dload_dir.path }}/etcd.tar.gz"
       dest: "{{ dload_dir.path }}"
       remote_src: true
-    when: etcd_curr_version.stdout != etcd_version
+     when: etcd_curr_version.stdout != etcd_version
 
-  - name: Copy etcd executable
-    become: true
-    become_user: root
-    ansible.builtin.copy:
-     src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcd" 
-     dest: "{{ etcd_executable_prefix }}/etcd"
-     remote_src: true
-     mode: u=rx,g=r,o=r
-     owner: "{{ ansible_user }}"
-    when: etcd_curr_version.stdout != etcd_version
+   - name: Copy etcd executable
+     become: true
+     become_user: root
+     ansible.builtin.copy:
+      src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcd"
+      dest: "{{ etcd_executable_prefix }}/etcd"
+      remote_src: true
+      mode: u=rx,g=r,o=r
+      owner: "{{ ansible_user }}"
+     when: etcd_curr_version.stdout != etcd_version
 
-  - name: Copy etcdctl executable
-    become: true
-    become_user: root
-    ansible.builtin.copy:
-     src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdctl"
-     dest: "{{ etcd_executable_prefix }}/etcdctl"
-     remote_src: true
-     mode: u=rx,g=r,o=r
-     owner: "{{ ansible_user }}"
-    when: etcd_curr_version.stdout != etcd_version
+   - name: Copy etcdctl executable
+     become: true
+     become_user: root
+     ansible.builtin.copy:
+      src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdctl"
+      dest: "{{ etcd_executable_prefix }}/etcdctl"
+      remote_src: true
+      mode: u=rx,g=r,o=r
+      owner: "{{ ansible_user }}"
+     when: etcd_curr_version.stdout != etcd_version
 
+   - name: Copy etcdutl executable
+     become: true
+     become_user: root
+     ansible.builtin.copy:
+      src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdutl"
+      dest: "{{ etcd_executable_prefix }}/etcdutl"
+      remote_src: true
+      mode: u=rx,g=r,o=r
+      owner: "{{ ansible_user }}"
+     when: etcd_curr_version.stdout != etcd_version
 
-  - name: Copy etcdutl executable
-    become: true
-    become_user: root
-    ansible.builtin.copy:
-     src: "{{ dload_dir.path }}/etcd-v{{ etcd_version }}-linux-ppc64le/etcdutl"
-     dest: "{{ etcd_executable_prefix }}/etcdutl"
-     remote_src: true
-     mode: u=rx,g=r,o=r
-     owner: "{{ ansible_user }}"
-    when: etcd_curr_version.stdout != etcd_version
-
-  # - name: Remove archive
-  #   ansible.builtin.command:
-  #     argv:
-  #       - rm
-  #       - -f
-  #       - "{{ etcd_location }}/etcd.tar.gz"
-
-
-  - name: Remove temp dir
-    ansible.builtin.file:
+   - name: Remove temp dir
+     ansible.builtin.file:
       path: "{{ dload_dir }}"
       state: absent
-    when: etcd_curr_version.stdout != etcd_version
+     when: etcd_curr_version.stdout != etcd_version
