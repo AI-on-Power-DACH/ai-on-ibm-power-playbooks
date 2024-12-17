@@ -56,7 +56,7 @@ Additionally to the normal configuration the following parameters can also be co
 
 #### Compatible configuration
 
-- Milvus: Version 2.4.15
+- Milvus: Version 2.4.17
 - cmake: Version 3.30.5
 - go: Version 1.23.3
 - Milvus power patch Version: 2.4.11

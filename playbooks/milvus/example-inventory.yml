@@ -24,7 +24,7 @@ techzone:
     etcd_version: 3.5.17
     etcd_data_dir: "{{ milvus_dir }}/etcd_data"
     minio_data_dir: "{{ milvus_dir}}/minio_data"
-    milvus_version: 2.4.16
+    milvus_version: 2.4.17
     milvus_patch_version: 2.4.11
     milvus_dir: "/home/{{ ansible_user }}/milvus"
     nproc: 32 # ca. nproc/4 to reduce likelyhood of oom-kills of the build process.

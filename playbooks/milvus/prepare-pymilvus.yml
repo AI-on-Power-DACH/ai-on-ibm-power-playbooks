@@ -11,7 +11,7 @@
 # - ansible_user: the user for which to install pymilvus & micromamba
 # - micromamba_location: The location of the micromamba binary. Should be in $PATH.
 #
-
+---
 - name: Micromamba setup
   hosts: techzone
   tasks:
@@ -51,16 +51,13 @@
           - --root-prefix
           - "{{ conda_dir }}"
           - --yes
-          - -f 
-          - "{{ working_directory}}/mamba-env-pymilvus.yml" 
+          - -f
+          - "{{ working_directory }}/mamba-env-pymilvus.yml"
 
     - name: Remove env file
       ansible.builtin.file:
-       path: "{{ working_directory }}/mamba-env-pymilvus.yml"
-       state: absent
-      # ansible.builtin.command:
-      #   cmd: rm ./mamba-env-pymilvus.yml
-      #   chdir: "{{ working_directory }}"
+        path: "{{ working_directory }}/mamba-env-pymilvus.yml"
+        state: absent
 
     - name: Test For ROOT_PREFIX
       ansible.builtin.command:
@@ -69,10 +66,10 @@
 
     - name: Persist Root Prefix
       ansible.builtin.command:
-        cmd: "micromamba shell init -s bash --root-prefix={{ conda_dir }}" 
+        cmd: "micromamba shell init -s bash --root-prefix={{ conda_dir }}"
       when: root_prefix.stdout != conda_dir
 
-  vars:
+  vars: # required & used by the `download-and-extract-micromamba` tasks.
     arch: linux-ppc64le
     version: latest
 
