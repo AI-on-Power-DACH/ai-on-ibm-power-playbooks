@@ -22,6 +22,8 @@
   hosts: techzone
   tasks:
 
+   # The /etc/profile.d/ shell scripts will be executed when a user logs in (e.g. via ssh)
+   # independt of the shell used.
    - name: Set Path
      become: true
      become_user: root
@@ -32,7 +34,7 @@
       state: present
       insertafter: EOF
       create: true
-      mode: a=r,u=rw
+      mode: a=r,u=rwx
 
    - name: Set Linker path
      become: true
@@ -44,8 +46,9 @@
       state: present
       insertafter: EOF
       create: true
-      mode: a=r,u=rw
+      mode: a=r,u=rwx
 
+   # required ENV_VAR when building Milvus on POWER
    - name: Set VCPKG System Binaries
      become: true
      become_user: root
@@ -56,7 +59,7 @@
       state: present
       insertafter: EOF
       create: true
-      mode: a=r,u=rw
+      mode: a=r,u=rwx
 
    - name: Set malloc config
      become: true
@@ -68,7 +71,7 @@
       state: present
       insertafter: EOF
       create: true
-      mode: a=r,u=rw
+      mode: a=r,u=rwx
 
    - name: Add yum Centos CRP repo
      become: true
@@ -120,18 +123,19 @@
      become_user: root
      ansible.builtin.command: 
       cmd: >
-       yum install -y --allowerasing  make wget git sudo curl zip unzip tar diffutils pkg-config python3-devel
+       yum install -y --allowerasing make wget git sudo curl zip unzip tar diffutils pkg-config python3-devel
        perl-IPC-Cmd perl-Digest-SHA perl-FindBin perl-File-Compare openssl-devel scl-utils openblas-devel rust
        cargo gcc gcc-c++ libstdc++-static which libaio libuuid-devel ncurses-devel ccache libtool m4 autoconf
        automake ninja-build zlib-devel libffi-devel gfortran yum-utils patchelf hdf5-devel sqlite-devel bzip2-devel
        xz-devel perl-open.noarch
+      # a very short list of most required dependencies :)
 
    - name: Create tmp dir
      ansible.builtin.tempfile:
       state: directory
      register: dload_dir
 
-   - name: Change temp dir ownership
+   - name: Change tmp dir ownership
      ansible.builtin.file:
       path: "{{ dload_dir.path }}"
       state: directory
@@ -154,7 +158,7 @@
      ansible.builtin.import_tasks: ../../download-and-extract-micromamba.yml
      when: not mamba_stat.stat.exists
 
-   - name: Check install env
+   - name: Check install env presence
      ansible.builtin.shell: 
       cmd: micromamba env list | grep milvus_install | cut -f3 -d" "
      register: mamba_install_env
@@ -182,7 +186,7 @@
       cmd: micromamba run --root-prefix {{ conda_dir }} -n milvus_install pip install conan==1.64.1 setuptools==59.5.0
      when: mamba_install_env.stdout != "milvus_install"
 
-  vars:
+  vars: # these are required by and will be passed on to `download-and-extract-micromamba`
    arch: linux-ppc64le
    version: latest
 

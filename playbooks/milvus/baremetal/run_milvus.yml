@@ -3,10 +3,10 @@
 # Parameters
 # - minio_data_dir (str/str): The directory for minio to store its data in
 # - etcd_data_dir (str/path): Same for etcd
-# - milvus_dir:               The directory in which milvus was build and lives contains configs/, lib/, bin/
+# - milvus_dir (str/path):    The directory in which milvus was build and lives contains configs/, lib/, bin/
 #                             Here all logs will also be stored.
-# - ansible_user:             The user for ansible / the user which will run the milvus service.
-# - etcd_port:                The port to use for etcd.
+# - ansible_user (str/path):  The user for ansible / the user which will run the milvus service.
+# - etcd_port (str/path):     The port to use for etcd.
 #
 # Log files
 # All logs can be live watched using `tail -f {{ log_file }}`
@@ -16,7 +16,6 @@
 # Stopping Milvus
 #
 # To stop Milvus (includes etcd) and minio, just send them a kill signal, e.g. `killall milvus; killall minio`.
-
 ---
 - name: Run etcd, minio & milvus
   hosts: techzone

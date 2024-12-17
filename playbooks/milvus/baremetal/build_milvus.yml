@@ -1,20 +1,30 @@
+# Actually Build milvus
+#
+# This playbook first downloads milvus and the patch for POWER, applies the patch and then builds Milvus
+# using cmake and conan. Afterwards the milvus binaries can be found at {{ milvus_dir }}/bin. Which will be
+# automatically added to the $PATH variable by the `install_build_env` playbook.
+#
+# Parameters
+# - ansible_user (string):  The login user for ansible which will also run milvus
+# - milvus_dir (string/path): The path to the milvus directory
+# - milvus_version (string):  The version of milvus to build
+# - milvus_patch_version (string):  The version of the milvus patch to apply (must be compatible, but may be older)
+# - conda_dir (string/path):        The path for all Conda/Mamba environments (MAMBA_ROOT_PREFIX)
+# - nproc (integer):                The number of threads to use for building milvus.
 ---
 - name: Install Milvus
   hosts: techzone
   tasks:
-  #  - name: Create Temp dir
-  #    ansible.builtin.tempfile:
-  #     state: directory
-  #    register: dload_dir
+
    - name: Create Milvus directory
      ansible.builtin.file:
       path: "{{ milvus_dir }}/"
       state: directory
-      mode: 755
+      mode: u=rwx,g=rwx,o=rx
       owner: "{{ ansible_user }}"
       group: "{{ ansible_user }}"
 
-   - name: Set permissions for milvus dir # somehow mode 755 in ansible is not readable?
+   - name: Set permissions for Milvus dir # somehow mode 755 in ansible is not readable?
      become: true
      become_user: root
      ansible.builtin.command:
@@ -34,7 +44,7 @@
       dest: "{{ milvus_dir }}/gitrepo"
      when: not milvus_stat.stat.exists
 
-   - name: Download milvus patch
+   - name: Download Milvus patch
      ansible.builtin.get_url:
       url: https://raw.githubusercontent.com/ppc64le/build-scripts/master/m/milvus/milvus-v{{ milvus_patch_version }}.patch
       dest: "{{ milvus_dir }}/milvus.patch"
@@ -72,9 +82,9 @@
       chdir: "{{ milvus_dir }}/gitrepo"
      when: build_command.rc != 0
      register: build_res
-     retries: 5
+     retries: 5                   # will try to build milvus 5 times, if it gets killed prematurely. This should be enought due
+                                  # to incremental building.
      until: build_res.rc == 0
-
 
    - name: Copy Binaries
      ansible.builtin.copy:
@@ -103,8 +113,3 @@
       dest: "{{ milvus_dir }}/lib/"
       remote_src: true
       mode: u+rx
-
-  #  - name: Remove Temp dir
-  #    ansible.builtin.file:
-  #     path: "{{ dload_dir.path }}"
-  #     state: absent

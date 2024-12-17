@@ -3,10 +3,10 @@
 A sub collection of ansible playbooks for deploying the vector database [milvus](https://milvus.io/).
 
 ## Ways to run milvus:
+- directly on a Linux host
 - using a single container (docker or podman/oci)
-- using three containers (docker composer)
+- using three containers (docker compose)
 - in a cluster (kubernetes/open shift)
-- 
 
 ## Playbooks:
 - `basic-milvus-podman`: 
@@ -30,23 +30,36 @@ For an example configuration, see the [example-inventory.yml](example-inventory.
 ### Baremetal
 
 Since the baremetal installation does not run everything encapsulated in docker, more options apply here.
-Additionally to the normal configuration the following parameters should also be configured:
+Additionally to the normal configuration the following parameters can also be configured:
 
 - **go_path** (string/path): The path at which all things go will live (includes the bin/ subdir which will be added to $PATH)
 - **go_version** (string):  The version of go to install.
 - **cmake_path** (string/path):  The path for the cmake source and build artefacts. (agian bin/ will be added to path)
-- **cmake_version** (string):   the version of cmake to install. Attention: This version must be compatible with milvus! See [example compatible configuration](#Comaptible-configuration)
+- **cmake_version** (string):   the version of cmake to install. Attention: This version must be compatible with milvus! See [example compatible configuration](#comaptible-configuration)
 - **etcd_version** (string):    The version of Etcd to install
 - **etcd_executable_prefix** (string/path): The path into which all etcd executable will be copied (should already be in $PATH).
-- TODO: add remianing from [Inventory](example-inventory.yml)
-- TODO: add header comment to [build_milvus](baremetal/build_milvus.yml)
+- **etcd_data_dir** (string/path): The path at which all data saved into etcd should be stored
+- **minio_data_dir** (string/path): The path for all minio stored data.
+- **minio_location** (string/path): The direct path for the minio binary (NOTE: Not a directory!), this should be inside $PATH.
+- **milvus_dir** (string/path): The path at which milvus will be checked out and build.
+                                 All non-builtin logs will also be placed directly into this directory.
+- **milvus_version** (string):  the milvus version to built.
+- **milvus_patch_version** (string):    The patch version which should be applied to the milvus source. Must be     
+                                        compatible with the milvus_source, but the same patch may be used relevant 
+                                        for multiple milvus versions.
+- **milvus_dir** (string/path):     The location for the milvus. The sub-directory `git_repo` Should not exist before the playbook is run. 
+                                    Other dirs, e.g. the `etcd_data_dir` might be located inside for a more semantical filestructure.
+- **nproc** (integer):              The number of threads used for building milvus. Since milvus tends to be very complex,
+                                    depending on the available resources, the build process might be killed by the OOM-killer
+                                    Compiling with fewer threads may help in lowering resource usage. The build script will
+                                    also retry the build up to 5 times, hoping, that this is enought due to cmake performing incremental builds.
 
 #### Compatible configuration
 
 - Milvus: Version 2.4.15
 - cmake: Version 3.30.5
 - go: Version 1.23.3
-- Milvus power patch: For min. Version 2.4.11
+- Milvus power patch Version: 2.4.11
 - Etcd Version: 3.5.17
 - Minio Version: Latest
 - Python Version: 3.11 (everything latest-1 should do)

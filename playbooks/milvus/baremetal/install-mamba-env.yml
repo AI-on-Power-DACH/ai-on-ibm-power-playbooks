@@ -4,3 +4,4 @@ channels:
   - defaults
 dependencies:
   - pip
+  # NOTE: other dependencies must be installed via pip (will be done by the playbook).
