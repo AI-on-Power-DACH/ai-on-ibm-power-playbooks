@@ -31,6 +31,19 @@
         regexp: "%{ etcd_port }%"
         replace: "{{ etcd_port }}"
 
+    - name: Chown milvus library files
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        cmd: chown {{ ansible_user }} -R /var/lib/milvus
+
+    - name: Create tmp milvus dir
+      ansible.builtin.file:
+        path: /tmp/milvus
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: u=rwx,g=rwx,o=r
+
     - name: Write Start script
       ansible.builtin.shell:
         cmd: echo -e "
@@ -42,12 +55,10 @@
           export LD_PRELOAD={{ milvus_dir }}/lib/libjemalloc.so.2\n
           nohup minio server {{ minio_data_dir }} > minio.log &\n
           nohup {{ milvus_dir }}/bin/milvus run standalone > milvus.log & \n
-          " > start_etcd.sh && chmod 755 ./start_etcd.sh
+          " > start_milvus.sh && chmod 755 ./start_milvus.sh
         chdir: "{{ milvus_dir }}"
 
     - name: Start Services
-      become: true
-      become_user: root
       ansible.builtin.shell:
-        cmd: ./start_etcd.sh
+        cmd: ./start_milvus.sh
         chdir: "{{ milvus_dir }}"
