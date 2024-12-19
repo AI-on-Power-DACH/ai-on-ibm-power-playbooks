@@ -16,6 +16,11 @@
 # Stopping Milvus
 #
 # To stop Milvus (includes etcd) and minio, just send them a kill signal, e.g. `killall milvus; killall minio`.
+#
+# Starting Milvus again
+#
+# To start milvus after this playbook has already been executed can be done using `{{ milvus_dir }}/start_milvus.sh`
+#   of course executing the playbook again also works.
 ---
 - name: Run etcd, minio & milvus
   hosts: techzone
@@ -34,17 +39,24 @@
         recurse: true
         mode: u=rwx,g=rw
 
+    - name: Check for existing config
+      ansible.builtin.stat:
+        path: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
+      register: config_stat
+
     - name: Upload Etcd Config
       ansible.builtin.copy:
         src: etcd_milvus_config.yaml
         dest: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
         mode: u=rw,g=r,o=r
+      when: not config_stat.stat.exists
 
     - name: Replace Etcd Port variable in config
       ansible.builtin.replace:
         path: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
         regexp: "%{ etcd_port }%"
         replace: "{{ etcd_port }}"
+      when: not config_stat.stat.exists
 
     - name: Create milvus data library directory
       become: true
@@ -81,9 +93,11 @@
           export MALLOC_CONF=background_thread:true\n
           export LD_PRELOAD={{ milvus_dir }}/lib/libjemalloc.so.2\n
           nohup minio server {{ minio_data_dir }} > minio.log &\n
+          sleep 30\n
           nohup {{ milvus_dir }}/bin/milvus run standalone > milvus.log & \n
           " > start_milvus.sh && chmod 755 ./start_milvus.sh
         chdir: "{{ milvus_dir }}"
+      when: not config_stat.stat.exists
 
     - name: Start Services
       ansible.builtin.shell:
