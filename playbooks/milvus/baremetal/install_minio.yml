@@ -1,0 +1,19 @@
+# Installs the Minio binary
+#
+# Parameters:
+# - minio_location (str/path):  the direct path of the minio binary (NO DIRECTORY)
+# - ansible_user (str):         The user running ansible / also the user who runs milvus in the end.
+---
+- name: Install Minio
+  hosts: techzone
+  tasks:
+  # NOTE: could also be installed using dnf however the versioning of minio is not semantic ...
+  #       this will install the latest version regardless.
+   - name: Download Minio binary
+     become: true
+     become_user: root
+     ansible.builtin.get_url:
+      url: https://dl.min.io/server/minio/release/linux-ppc64le/minio
+      dest: "{{ minio_location }}"
+      mode: u+x
+      owner: "{{ ansible_user }}"

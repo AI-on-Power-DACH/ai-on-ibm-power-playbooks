@@ -1,0 +1,71 @@
+# Sets up a podman container running milvus
+#
+# Parameters:
+# - working_directory: The directory to put milvus files into.
+# - milvus_port: The port to expose milvus on
+# - milvus_etcd_port: The port for milvus embedded etcd service
+# - auto_start: Whether to directly start the container or not
+
+- name: System setup
+  hosts: techzone
+  tasks:
+   - name: Ping host
+     ansible.builtin.ping:
+   - name: Create Working directory
+     ansible.builtin.file:
+      path: "{{ working_directory }}/milvus/volumes"
+      state: directory
+      owner: "{{ ansible_user }}"
+      mode: "0775"
+      recurse: true
+   - name: Install Podman
+     become: true
+     become_user: root
+     ansible.builtin.dnf:
+      name:
+       - podman
+
+- name: Install Milvus
+  hosts: techzone
+  tasks:
+   - name: Copy management script
+     ansible.builtin.copy:
+      src: "./standalone_embed_ppc64le.sh"
+      dest: "{{ working_directory }}/milvus_embed.sh"
+      mode: u=rx,g=r,o=r
+
+   - name: Check for Running installation
+     ansible.builtin.command:
+      cmd: "./milvus_embed.sh status"
+      chdir: "{{ working_directory }}"
+     register: container_status
+     failed_when: container_status.rc not in [0, 1]
+     changed_when: false
+
+   - name: Pulling Image
+     ansible.builtin.raw: |
+        podman pull quay.io/mmielimonka/milvus:latest
+     when: container_status.rc == 1 
+
+   - name: Allow Podman runs after ssh disconnect
+     become: true
+     become_user: root
+     ansible.builtin.command:
+      argv:
+       - loginctl
+       - enable-linger
+
+   - name: Starting Container
+     ansible.builtin.raw: |
+      cd {{ working_directory }} && ./milvus_embed.sh start -e {{ milvus_etcd_port | default('2379') | quote }} -m {{ milvus_port | default('19530') | quote }}
+     when: container_status.rc == 1 and auto_start
+ 
+   - name: Run Container health probe
+     ansible.builtin.command: 
+      cmd: curl -f http://localhost:9091/healthz
+     changed_when: false
+     register: container_health
+
+   - name: Print Health check
+     ansible.builtin.debug:
+      msg: "health status: {{ container_health.stdout }}"

@@ -1,0 +1,91 @@
+
+# Installs all required python packages to connect to a milvus instance via python
+#   - will install micromamba if not already installed
+#   - will create a new micromamba environment called "milvus"
+#   - will install pymilvus into the "milvus" environment
+#
+#
+# Parameters:
+# - python_version: The python version to use for the venv
+# - conda_dir: the directoryfrom which micromamba should operate
+# - ansible_user: the user for which to install pymilvus & micromamba
+# - micromamba_location: The location of the micromamba binary. Should be in $PATH.
+#
+---
+- name: Micromamba setup
+  hosts: techzone
+  tasks:
+    - name: "Check if micromamba already exists in {{ micromamba_location }}"
+      ansible.builtin.stat:
+        path: "{{ micromamba_location }}"
+      register: dest_stat
+
+    - name: Install System Requirements
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - bzip2
+      when: not dest_stat.stat.exists
+
+    - name: Check Working dir
+      ansible.builtin.file:
+        path: "{{ working_directory }}"
+        state: directory
+
+    - name: Install micromamba
+      ansible.builtin.import_tasks: ../download-and-extract-micromamba.yml
+      when: not dest_stat.stat.exists
+
+    - name: Copy Env files
+      ansible.builtin.copy:
+        src: ./mamba-env-pymilvus.yml
+        dest: "{{ working_directory }}/mamba-env-pymilvus.yml"
+        mode: a=r
+
+    - name: Create milvus environment
+      ansible.builtin.command:
+        argv:
+          - micromamba
+          - create
+          - --root-prefix
+          - "{{ conda_dir }}"
+          - --yes
+          - -f
+          - "{{ working_directory }}/mamba-env-pymilvus.yml"
+
+    - name: Remove env file
+      ansible.builtin.file:
+        path: "{{ working_directory }}/mamba-env-pymilvus.yml"
+        state: absent
+
+    - name: Test For ROOT_PREFIX
+      ansible.builtin.command:
+        cmd: echo -n $MAMBA_ROOT_PREFIX
+      register: root_prefix
+
+    - name: Persist Root Prefix
+      ansible.builtin.command:
+        cmd: "micromamba shell init -s bash --root-prefix={{ conda_dir }}"
+      when: root_prefix.stdout != conda_dir
+
+  vars: # required & used by the `download-and-extract-micromamba` tasks.
+    arch: linux-ppc64le
+    version: latest
+
+- name: Pip Setup
+  hosts: techzone
+  tasks:
+    - name: Install pip dependencies
+      ansible.builtin.command:
+        argv:
+          - micromamba
+          - run
+          - --root-prefix
+          - "{{ conda_dir }}"
+          - -n
+          - milvus
+          - pip
+          - install
+          - pymilvus
+          - sentence-transformers

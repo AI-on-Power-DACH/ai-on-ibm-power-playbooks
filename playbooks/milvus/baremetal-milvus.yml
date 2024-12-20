@@ -1,0 +1,21 @@
+#
+#
+# Parameters:
+#   - remove_build_dependencies (bool): false
+#   - milvus_version (string): version of milvus to install
+#   - etcd_version (string): version of etcd to install
+#   - etcd_executable_prefix (string): path to dir under which etcd executables should live.
+#   - auto_start (bool): whether to automatically start milvus and it's required services.
+#
+---
+- name: Prepare Build env
+  ansible.builtin.import_playbook: baremetal/install_build_env.yml
+- name: Install Minio
+  ansible.builtin.import_playbook: baremetal/install_minio.yml
+- name: Install Etcd
+  ansible.builtin.import_playbook: baremetal/install_etcd.yml
+- name: Install Milvus
+  ansible.builtin.import_playbook: baremetal/build_milvus.yml
+- name: Start Milvus
+  ansible.builtin.import_playbook: baremetal/run_milvus.yml
+  when: auto_start
