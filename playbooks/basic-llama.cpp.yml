@@ -57,6 +57,7 @@
           - gcc-toolset-13
           - git
           - openblas-devel
+          - libxcrypt-compat
         state: latest
     
 - name: Micromamba setup

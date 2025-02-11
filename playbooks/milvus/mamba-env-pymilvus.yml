@@ -1,0 +1,27 @@
+name: milvus
+channels:
+  - rocketce
+  - defaults
+dependencies:
+  - black
+  - build
+  - grpcio
+  - minio
+  - pandas>=1.1.5
+  - pip
+  - protobuf
+  - pyarrow
+  - pyparsing
+  - pytest>=5.3.4
+  - python >= 3.7
+  - pytorch-cpu
+  - requests
+  - scikit-learn
+  - scipy
+  - tqdm
+  - transformers
+  - ujson
+# packages required but not yet in rocketce/defaults:
+# - pymilvus
+# - sentence-transformers
+# will be installed via pip in the ansible playbook.

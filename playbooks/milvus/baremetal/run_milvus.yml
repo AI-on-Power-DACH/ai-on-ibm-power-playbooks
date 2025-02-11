@@ -1,0 +1,105 @@
+# Runs a local milvus install by first starting minio & etcd and then milvus.
+#
+# Parameters
+# - minio_data_dir (str/str): The directory for minio to store its data in
+# - etcd_data_dir (str/path): Same for etcd
+# - milvus_dir (str/path):    The directory in which milvus was build and lives contains configs/, lib/, bin/
+#                             Here all logs will also be stored.
+# - ansible_user (str/path):  The user for ansible / the user which will run the milvus service.
+# - etcd_port (str/path):     The port to use for etcd.
+#
+# Log files
+# All logs can be live watched using `tail -f {{ log_file }}`
+# - {{ milvus_dir }}/minio.log:   The log for minio
+# - {{ milvus_dir }}/milvus.log:  The log for milvs
+#
+# Stopping Milvus
+#
+# To stop Milvus (includes etcd) and minio, just send them a kill signal, e.g. `killall milvus; killall minio`.
+#
+# Starting Milvus again
+#
+# To start milvus after this playbook has already been executed can be done using `{{ milvus_dir }}/start_milvus.sh`
+#   of course executing the playbook again also works.
+---
+- name: Run etcd, minio & milvus
+  hosts: techzone
+  tasks:
+    - name: Create Minio Data dir
+      ansible.builtin.file:
+        state: directory
+        path: "{{ minio_data_dir }}"
+        recurse: true
+        mode: u=rwx,g=rw
+
+    - name: Create Etcd Data dir
+      ansible.builtin.file:
+        state: directory
+        path: "{{ etcd_data_dir }}"
+        recurse: true
+        mode: u=rwx,g=rw
+
+    - name: Check for existing config
+      ansible.builtin.stat:
+        path: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
+      register: config_stat
+
+    - name: Upload Etcd Config
+      ansible.builtin.copy:
+        src: etcd_milvus_config.yaml
+        dest: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
+        mode: u=rw,g=r,o=r
+      when: not config_stat.stat.exists
+
+    - name: Replace Etcd Port variable in config
+      ansible.builtin.replace:
+        path: "{{ milvus_dir }}/configs/etcd_milvus_config.yaml"
+        regexp: "%{ etcd_port }%"
+        replace: "{{ etcd_port }}"
+      when: not config_stat.stat.exists
+
+    - name: Create milvus data library directory
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: /var/lib/milvus
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: u=rwx,g=rwx,o=r
+
+    # required when running milvus as non-root,
+    # run in case /var/lib/milvus already exists.
+    - name: Chown milvus library files
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        cmd: chown {{ ansible_user }} -R /var/lib/milvus
+
+    - name: Create tmp milvus dir
+      ansible.builtin.file:
+        path: /tmp/milvus
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: u=rwx,g=rwx,o=r
+
+    # This is easier than copying and repeatedly replacing in a file.
+    - name: Write Start script
+      ansible.builtin.shell:
+        cmd: echo -e "
+          export ETCD_DATA_DIR={{ etcd_data_dir }} \n
+          export ETCD_USE_EMBED=true \n
+          export ETCD_CONFIG_PATH={{ milvus_dir }}/configs/etcd_milvus_config.yaml \n
+          export COMMON_STORAGETYPE=local \n
+          export MALLOC_CONF=background_thread:true\n
+          export LD_PRELOAD={{ milvus_dir }}/lib/libjemalloc.so.2\n
+          nohup minio server {{ minio_data_dir }} > minio.log &\n
+          sleep 30\n
+          nohup {{ milvus_dir }}/bin/milvus run standalone > milvus.log & \n
+          " > start_milvus.sh && chmod 755 ./start_milvus.sh
+        chdir: "{{ milvus_dir }}"
+      when: not config_stat.stat.exists
+
+    - name: Start Services
+      ansible.builtin.shell:
+        cmd: ./start_milvus.sh
+        chdir: "{{ milvus_dir }}"

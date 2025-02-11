@@ -1,0 +1,34 @@
+techzone:
+  hosts:
+    techzone1:
+  vars:
+    # common:
+    ansible_user: user
+    auto_start: true 
+    milvus_port: 19530
+    minio_port: 9091
+    etcd_port: 2379
+
+    # pymilvus
+    python_version: 3.11
+    conda_dir: "/home/{{ ansible_user }}/micromamba"
+    micromamba_location: "/usr/local/bin/micromamba"
+
+    # podman-milvus
+    working_directory: "/home/{{ ansible_user }}/milvus"
+
+    # bare_metal
+    go_path: /usr/local/go
+    go_version: 1.23.3
+    cmake_version: 3.30.5
+    etcd_version: 3.5.17
+    etcd_data_dir: "{{ milvus_dir }}/etcd_data"
+    minio_data_dir: "{{ milvus_dir}}/minio_data"
+    milvus_version: 2.4.17
+    milvus_patch_version: 2.4.11
+    milvus_dir: "/home/{{ ansible_user }}/milvus"
+    nproc: 32 # ca. nproc/4 to reduce likelyhood of oom-kills of the build process.
+
+    cmake_path: /usr/local/cmake
+    etcd_executable_prefix: /usr/local/bin
+    minio_location: /usr/local/bin/minio
