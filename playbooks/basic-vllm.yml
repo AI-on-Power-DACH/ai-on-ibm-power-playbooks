@@ -1,0 +1,355 @@
+- name: System setup
+  hosts: techzone
+  tasks:
+    - name: Ping my host
+      ansible.builtin.ping:
+
+    - name: Delete pytorch directory to prevent selinux issues with subdirectories
+      ansible.builtin.file:
+        state: absent
+        path: "{{ working_directory }}/pytorch"
+    
+    - name: Create working directory
+      ansible.builtin.file:
+        path: "{{ working_directory }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+
+    - name: Get RHEL version
+      ansible.builtin.shell: rpm -E %rhel
+      register: rhel_version
+
+    - name: Print RHEL version
+      ansible.builtin.debug:
+        msg: "RHEL version: {{ rhel_version.stdout }}"
+
+    - rpm_key:
+        state: present
+        key: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ rhel_version.stdout }}"
+      become: true
+      become_user: root
+
+    - name: Install enterprise package
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - dnf-plugins-core
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ rhel_version.stdout }}.noarch.rpm"
+        state: latest
+
+    - name: Enable powertools/codeready builder for RHEL (powertools under CentOS)
+      become: true
+      become_user: root
+      command: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
+
+    - name: Install the 'Development tools' package group
+      become: true
+      become_user: root
+      dnf:
+        name: '@Development tools'
+        state: present
+    
+    - name: Install further system dependencies
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - bzip2
+          - gcc-toolset-12
+          - gcc-toolset-13
+          - git
+          - numactl-devel
+        state: latest
+
+    - name: Install latest rust version
+      ansible.builtin.shell: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y;
+    
+- name: Micromamba setup
+  hosts: techzone
+  tasks:
+    - name: "Check if micromamba already exists in {{ micromamba_location }}"
+      ansible.builtin.stat:
+        path: "{{ micromamba_location }}"
+      register: dest_stat
+
+    - name: Install micromamba
+      ansible.builtin.import_tasks: download-and-extract-micromamba.yml
+      when: not dest_stat.stat.exists
+    
+    - name: Install basic Python dependencies
+      ansible.builtin.command:
+        argv:
+          - micromamba
+          - install
+          - --yes
+          - "--root-prefix={{ conda_dir }}"
+          - "--prefix={{ conda_dir }}"
+          - --channel=rocketce
+          - --channel=defaults
+          - "python={{ python_version }}"
+          - httptools
+          - pillow
+  vars:
+    arch: linux-ppc64le
+    version: latest
+
+- name: vLLM build
+  hosts: techzone
+  tasks:
+    - name: Install cmake for building protobuf and vllm
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install --prefer-binary --extra-index-url https://repo.fury.io/mgiessing \
+          "cmake>=3.26" \
+          ninja;
+
+    - name: Clone openblas repository
+      git:
+        repo: https://github.com/xianyi/OpenBLAS
+        dest: "{{ working_directory }}/openblas"
+        clone: yes
+        force: true
+        update: yes
+        single_branch: yes
+        version: v0.3.29
+      
+    - name: Create openblas installation directory
+      ansible.builtin.file:
+        path: /opt/OpenBLAS
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+      become: true
+      become_user: root
+      
+    - name: Build openblas
+      ansible.builtin.shell: |
+        BINARY=64 USE_OPENMP=1 USE_THREAD=1 DYNAMIC_ARCH=1 make -j$(nproc --all) TARGET=POWER9 GEMM_GEMV_FORWARD=1;
+        make PREFIX=/opt/OpenBLAS install;
+      args:
+        chdir: "{{ working_directory }}/openblas"
+      
+    - name: Clone pytorch repository
+      git:
+        repo: https://github.com/pytorch/pytorch
+        dest: "{{ working_directory }}/pytorch"
+        clone: yes
+        force: true
+        update: yes
+        single_branch: yes
+        version: v2.5.1
+      
+    - name: Build psutil from source as no wheels for ppc64le exist currently
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install --no-binary :all: psutil;
+      
+    - name: Install pytorch dependencies
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install \
+          -r requirements.txt;
+      args:
+        chdir: "{{ working_directory }}/pytorch"
+
+    - name: Change pytorch version for discovery (bug in official repository)
+      ansible.builtin.lineinfile:
+        path: "{{ working_directory }}/pytorch/version.txt"
+        regexp: "^2(.*)$"
+        line: "2.5.1"
+        backrefs: yes
+      
+    - name: Build pytorch
+      ansible.builtin.shell: |
+        USE_GLOO=True USE_OPENMP=1 ATEN_THREADING=OMP USE_FBGEMM=0 USE_XPU=0 \
+        USE_CUDA=0 USE_ROCM=0 USE_NNPACK=0 USE_XNNPACK=0 USE_QNNPACK=0 USE_PYTORCH_QNNPACK=0 USE_DISTRIBUTED=1 \
+        USE_TENSORPIPE=1 BLAS=OpenBLAS BUILD_TEST=0 MAX_JOBS=16 python{{ python_version }} setup.py install;
+      args:
+        chdir: "{{ working_directory }}/pytorch"
+      
+    - name: Clone torchvision repository
+      git:
+        repo: https://github.com/pytorch/vision.git
+        dest: "{{ working_directory }}/vision"
+        clone: yes
+        force: true
+        update: yes
+        single_branch: yes
+        version: v0.20.0
+      
+    - name: Build torchvision
+      ansible.builtin.shell: |
+        python{{ python_version }} setup.py develop;
+      args:
+        chdir: "{{ working_directory }}/vision"
+      
+    - name: Clone protobuf repository
+      git:
+        repo: https://github.com/protocolbuffers/protobuf.git
+        dest: "{{ working_directory }}/protobuf"
+        clone: yes
+        force: true
+        update: yes
+        single_branch: yes
+        version: v21.12
+      
+    - name: Create build directory
+      ansible.builtin.file:
+        path: "{{ working_directory }}/protobuf/build"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+      
+    - name: Build protobuf
+      ansible.builtin.shell: |
+        cmake ../cmake  -DCMAKE_INSTALL_LIBDIR=lib64 -Dprotobuf_BUILD_SHARED_LIBS=OFF \
+          -DCMAKE_INSTALL_PREFIX=${HOME}/protbuf -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+          -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release;
+        make -j$(nproc) && make install;
+      args:
+        chdir: "{{ working_directory }}/protobuf/build"
+      
+    - name: Clone vllm repository
+      git:
+        repo: https://github.com/vllm-project/vllm.git
+        dest: "{{ working_directory }}/vllm"
+        clone: yes
+        force: true
+        update: yes
+      
+    - name: Install xformers for better dependency resolution
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install \
+            https://github.com/DahlitzFlorian/xformers-ppc64le/releases/download/0.0.29.post1/xformers-0.0.29.post1-cp311-cp311-linux_ppc64le.whl;
+      args:
+        chdir: "{{ working_directory }}/vllm"
+      
+    - name: "Remove already installed dependencies from vllm's requirements-cpu.txt file: torchvision"
+      ansible.builtin.lineinfile:
+        dest: "{{ working_directory }}/vllm/requirements-cpu.txt"
+        state: absent
+        regexp: "^(.*)torchvision(.*)$"
+      
+    - name: Install vllm dependencies
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install --prefer-binary --extra-index-url https://repo.fury.io/mgiessing \
+            ninja packaging "setuptools-scm>=8" setuptools wheel jinja2 \
+            -r requirements-cpu.txt \
+            uvloop==0.20.0;
+      args:
+        chdir: "{{ working_directory }}/vllm"
+      
+    - name: "Remove already installed dependencies from vllm's pyproject.toml file: torch"
+      ansible.builtin.lineinfile:
+        dest: "{{ working_directory }}/vllm/pyproject.toml"
+        state: absent
+        regexp: "^(.*)torch(.*)$"
+      
+    - name: Build vllm
+      ansible.builtin.shell: |
+        CMAKE_PREFIX_PATH=${HOME}/protbuf/lib64/cmake/protobuf VLLM_TARGET_DEVICE=cpu python setup.py install;
+      args:
+        chdir: "{{ working_directory }}/vllm"
+      
+- name: LLM setup
+  hosts: techzone
+  tasks:
+    - name: Populate service facts
+      service_facts:
+
+    - name: Stop already existing vllm service
+      ansible.builtin.systemd_service:
+        state: stopped
+        name: vllm
+      become: true
+      become_user: root
+      when: "'vllm.service' in services"
+
+    - name: Install huggingface-cli
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install -U "huggingface_hub[cli]"
+
+    - name: Download LLM
+      ansible.builtin.shell: |
+        huggingface-cli download {{ model_repository }};
+
+    - name: Build parameter list (-)
+      ansible.builtin.set_fact:
+        vllm_args: >-
+          {% set result = [] -%}
+          {% for key in vllm_args.keys() -%}
+            {% set ignored = result.extend(["-" + key, vllm_args[key] or ""]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: vllm_args is defined
+
+    - name: Build parameter list (--)
+      ansible.builtin.set_fact:
+        vllm_argv: >-
+          {% set result = [] -%}
+          {% for key in vllm_argv.keys() -%}
+            {% set ignored = result.extend(["--" + key, vllm_argv[key] or ""]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: vllm_argv is defined
+
+    - name: Default vllm parameter list (-)
+      ansible.builtin.set_fact:
+        vllm_args: ""
+      when: vllm_args is not defined
+
+    - name: Default vllm parameter list (--)
+      ansible.builtin.set_fact:
+        vllm_argv: "--api-key examplekey01 --host 0.0.0.0 --port 8080 --max-model-len 10000"
+      when: vllm_argv is not defined
+
+    - name: Print parameter lists
+      ansible.builtin.debug:
+        msg: "Parameters: {{ vllm_args }} {{ vllm_argv }}"
+
+    - name: Copy systemd service template for vllm
+      ansible.builtin.copy:
+        src: template.service
+        dest: /etc/systemd/system/vllm.service
+        owner: "{{ ansible_user }}"
+        mode: u=rw,g=r,o=rwx
+      become: true
+      become_user: root
+
+    - name: Insert service name into vllm service file
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/vllm.service
+        regexp: "^Description=(.*)$"
+        line: "Description=vLLM Service"
+        backrefs: yes
+      become: true
+      become_user: root
+
+    - name: Insert entrypoint into vllm service file
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/vllm.service
+        regexp: "^ExecStart=(.*)$"
+        line: "ExecStart={{ conda_dir }}/bin/vllm serve {{ model_repository }} {{ vllm_args }} {{ vllm_argv }}"
+        backrefs: yes
+      become: true
+      become_user: root
+
+    - name: Insert user into vllm service file
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/vllm.service
+        regexp: "^User=(.*)$"
+        line: "User={{ ansible_user }}"
+        backrefs: yes
+      become: true
+      become_user: root
+
+    - name: Start vllm service
+      ansible.builtin.systemd_service:
+        state: started
+        daemon_reload: true
+        name: vllm
+      become: true
+      become_user: root
