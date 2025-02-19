@@ -310,9 +310,32 @@
       ansible.builtin.debug:
         msg: "Parameters: {{ vllm_args }} {{ vllm_argv }}"
 
+    - name: Copy default vllm environment file
+      ansible.builtin.copy:
+        src: default_vllm_environment
+        dest: "{{ working_directory }}/vllm_env"
+        owner: "{{ ansible_user }}"
+        mode: u=rw,g=r,o=rwx
+      when: vllm_environment is not defined
+
+    - name: Create vllm environment file
+      ansible.builtin.file:
+        path: "{{ working_directory }}/vllm_env"
+        state: touch
+        owner: "{{ ansible_user }}"
+        mode: 0775
+      when: vllm_environment is defined
+
+    - name: Insert vllm environment variables in environment file
+      ansible.builtin.lineinfile:
+        dest: "{{ working_directory }}/vllm_env"
+        line: "{{ item.key }}=\"{{ item.value }}\""
+      loop: "{{ vllm_environment | dict2items }}"
+      when: vllm_environment is defined
+
     - name: Copy systemd service template for vllm
       ansible.builtin.copy:
-        src: template.service
+        src: vllm_template.service
         dest: /etc/systemd/system/vllm.service
         owner: "{{ ansible_user }}"
         mode: u=rw,g=r,o=rwx
@@ -342,6 +365,15 @@
         path: /etc/systemd/system/vllm.service
         regexp: "^User=(.*)$"
         line: "User={{ ansible_user }}"
+        backrefs: yes
+      become: true
+      become_user: root
+
+    - name: Insert environment file into vllm service file
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/vllm.service
+        regexp: "^EnvironmentFile=(.*)$"
+        line: "EnvironmentFile={{ working_directory }}/vllm_env"
         backrefs: yes
       become: true
       become_user: root
