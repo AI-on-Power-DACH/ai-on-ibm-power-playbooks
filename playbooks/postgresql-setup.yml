@@ -1,0 +1,32 @@
+- name: Setup PostgreSQL
+  hosts: all
+  tasks:
+    - name: Install postgresql packages
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - postgresql-server
+          - postgresql-server-devel
+        state: latest
+
+    - name: Check if postgresql is initialized
+      become: true
+      become_user: root
+      ansible.builtin.stat:
+        path: /var/lib/pgsql/data/pg_hba.conf
+      register: postgres_data
+
+    - name: Initialize postgresql
+      become: true
+      become_user: root
+      ansible.builtin.shell: postgresql-setup --initdb
+      when: not postgres_data.stat.exists
+
+    - name: Start postgresql service
+      ansible.builtin.systemd_service:
+        state: started
+        daemon_reload: true
+        name: postgresql
+      become: true
+      become_user: root

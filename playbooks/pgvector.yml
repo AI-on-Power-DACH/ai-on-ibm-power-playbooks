@@ -1,0 +1,120 @@
+- name: Set up system
+  hosts: all
+  tasks:
+    - name: Ping my host
+      ansible.builtin.ping:
+
+    - name: Get RHEL version
+      ansible.builtin.shell: rpm -E %rhel
+      register: rhel_version
+
+    - name: Print RHEL version
+      ansible.builtin.debug:
+        msg: "RHEL version: {{ rhel_version.stdout }}"
+
+    - rpm_key:
+        state: present
+        key: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ rhel_version.stdout }}"
+      become: true
+      become_user: root
+
+    - name: Install enterprise package
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - dnf-plugins-core
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ rhel_version.stdout }}.noarch.rpm"
+        state: latest
+
+    - name: Enable powertools/codeready builder for RHEL (powertools under CentOS)
+      become: true
+      become_user: root
+      command: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
+
+    - name: Install the 'Development tools' package group
+      become: true
+      become_user: root
+      dnf:
+        name: '@Development tools'
+        state: present
+
+- name: Import postgresql setup playbook
+  ansible.builtin.import_playbook: postgresql-setup.yml
+  when: postgres_setup is defined and postgres_setup
+
+- name: Set up pgvector extension
+  hosts: all
+  tasks:
+    - name: Set pgvector version
+      ansible.builtin.set_fact:
+        pgvector_version: 0.8.0
+      when: pgvector_version is undefined
+
+    - name: Clone pgvector repository
+      git:
+        repo: https://github.com/pgvector/pgvector.git
+        dest: /tmp/pgvector
+        clone: yes
+        force: true
+        update: yes
+        single_branch: yes
+        version: "v{{ pgvector_version }}"
+
+    - name: Find pg_config
+      ansible.builtin.find:
+        paths:
+          - /var/lib/pgsql
+          - /var
+        file_type: file
+        patterns:
+          - "pg_config"
+        limit: 1
+      register: pg_config_find_result
+      when: pg_config_path is undefined
+
+    - name: Set pg_config path
+      ansible.builtin.set_fact:
+        pg_config_path: "{{ pg_config_find_result.files }}"
+
+    - name: Build pgvector
+      become: true
+      become_user: root
+      ansible.builtin.shell: make
+      environment:
+        PG_CONFIG: "{{ pg_config_path }}"
+      args:
+        chdir: /tmp/pgvector
+
+    - name: Install pgvector
+      become: true
+      become_user: root
+      ansible.builtin.shell: sudo make install
+      environment:
+        PG_CONFIG: "{{ pg_config_path }}"
+      args:
+        chdir: /tmp/pgvector
+
+    - name: Find all non-desired pgvector versions
+      ansible.builtin.find:
+        paths:
+          - /usr/share/pgsql/extension
+        file_type: file
+        patterns:
+          - "vector*.sql"
+        excludes:
+          - "vector--{{ pgvector_version }}.sql"
+      register: pgvector_find_result
+
+    - name: Delete all non-desired pgvector versions
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ pgvector_find_result.files }}"
+
+    - name: Remove pgvector from temp directory
+      ansible.builtin.file:
+        state: absent
+        path: /tmp/pgvector
