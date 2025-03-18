@@ -1,0 +1,37 @@
+- name: Ping my host
+  ansible.builtin.ping:
+
+- name: Get RHEL version
+  ansible.builtin.shell: rpm -E %rhel
+  register: rhel_version
+
+- name: Print RHEL version
+  ansible.builtin.debug:
+    msg: "RHEL version: {{ rhel_version.stdout }}"
+
+- rpm_key:
+    state: present
+    key: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ rhel_version.stdout }}"
+  become: true
+  become_user: root
+
+- name: Install enterprise package
+  become: true
+  become_user: root
+  dnf:
+    name:
+      - dnf-plugins-core
+      - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ rhel_version.stdout }}.noarch.rpm"
+    state: latest
+
+- name: Enable powertools/codeready builder for RHEL (powertools under CentOS)
+  become: true
+  become_user: root
+  command: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
+
+- name: Install the 'Development tools' package group
+  become: true
+  become_user: root
+  dnf:
+    name: '@Development tools'
+    state: present
