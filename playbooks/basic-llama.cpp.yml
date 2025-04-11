@@ -54,9 +54,11 @@
         name:
           - bzip2
           - cmake
+          - curl
           - gcc-toolset-13
           - git
           - openblas-devel
+          - libcurl-devel
           - libxcrypt-compat
         state: latest
     
