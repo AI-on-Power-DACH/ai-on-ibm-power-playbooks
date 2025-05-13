@@ -1,0 +1,148 @@
+# Installs ChromaDB into the current python environment
+#
+# This is done by downloading and building chromadb itself.
+#
+# Parameters:
+# - chroma_env_name: Name of the micromamba env in which chroma will be installed
+# - chroma_version: The version of chroma to install (defaults to latest)
+# - working_directory: The directory in which the chroma/ subdir for all files (e.g. python) of chroma will live.
+# - conda_dir:  Directory for all conda environments (root-prefix)
+# - python_version: The version of python to use for the micromamba env
+---
+- name: Install ChromaDB
+  hosts: techzone
+  vars:
+    # required for micromamba install
+    arch: linux-ppc64le
+    version: latest
+    protoc_version: 30.2
+
+  tasks:
+    - name: Ping host
+      ansible.builtin.ping:
+
+    - name: Setup PIP Repo (fury.io/mgiesing)
+      become: true
+      become_user: root
+      ansible.builtin.lineinfile:
+        dest: /etc/profile.d/pip_setup.sh
+        line: export PIP_EXTRA_INDEX_URL=https://repo.fury.io/mgiessing
+        owner: root
+        state: present
+        insertafter: EOF
+        create: true
+        mode: a=r,u=rwx
+
+    - name: Setup PIP for binaries
+      become: true
+      become_user: root
+      ansible.builtin.lineinfile:
+        dest: /etc/profile.d/pip_setup.sh
+        line: export PIP_PREFER_BINARY=true
+        owner: root
+        state: present
+        insertafter: EOF
+        create: true
+        mode: a=r,u=rwx
+
+    - name: Install dependencies
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - git
+          - curl
+        state: present
+
+    - name: Create temp dir
+      ansible.builtin.tempfile:
+        state: directory
+      register: build_dir
+
+    - name: Install Protobuf
+      ansible.builtin.shell:
+        chdir: "{{ build_dir.path }}"
+        cmd: curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v{{ protoc_version }}/protoc-{{ protoc_version }}-linux-ppcle_64.zip && unzip -o protoc-{{ protoc_version}}-linux-ppcle_64.zip -d $HOME/.local
+
+    - name: "Check if micromamba already exists in {{ micromamba_location }}"
+      ansible.builtin.stat:
+        path: "{{ micromamba_location }}"
+      register: mamba_stat
+    - name: Install micromamba
+      ansible.builtin.import_tasks: ./download-and-extract-micromamba.yml
+      when: not mamba_stat.stat.exists
+
+    - name: Check install env presence
+      ansible.builtin.shell:
+        cmd: micromamba env list | grep {{ chroma_env_name | default('chroma') }} | cut -f3 -d" "
+      register: mamba_install_env
+
+    - name: Create {{ chroma_env_name | default('chroma') }} python env
+      ansible.builtin.command:
+        argv:
+          - micromamba
+          - create
+          - --root-prefix
+          - "{{ conda_dir }}"
+          - --yes
+          - -n
+          - "{{ chroma_env_name | default('chroma') }}"
+          - --channel=rocketce
+          - --channel=defaults
+          - python={{ python_version }}
+          - maturin
+      when: not mamba_install_env.stdout == chroma_env_name
+
+    - name: Clean Chroma dir
+      ansible.builtin.file:
+        path: "{{ working_directory }}/chroma"
+        state: absent
+
+    - name: Clone chromadb repo
+      ansible.builtin.git:
+        repo: https://github.com/chroma-core/chroma.git
+        single_branch: true
+        version: "{{ chroma_version | default('latest') }}"
+        dest: "{{ working_directory }}/chroma"
+
+    - name: Clone generator-rs repo
+      ansible.builtin.git:
+        repo: https://github.com/Xudong-Huang/generator-rs.git
+        single_branch: true
+        version: 0.8.5
+        dest: "{{ build_dir.path }}/generator"
+
+    - name: Patch chromas Cargo.toml
+      ansible.builtin.blockinfile:
+        path: "{{ working_directory }}/chroma/Cargo.toml"
+        block: |
+          [patch.crates-io]
+          generator = { path = "{{ build_dir.path }}/generator" }
+        append_newline: true
+        prepend_newline: true
+
+    - name: Update chroma lockfile
+      ansible.builtin.command:
+        chdir: "{{ working_directory }}/chroma"
+        argv:
+          - cargo
+          - update
+          - generator@0.8.1
+      changed_when: false
+
+    - name: Build and Install Chroma
+      ansible.builtin.command:
+        chdir: "{{ working_directory }}/chroma"
+        argv:
+          - micromamba
+          - run
+          - --root-prefix={{ conda_dir }}
+          - -n
+          - "{{ chroma_env_name | default('chroma') }}"
+          - maturin
+          - dev
+
+    - name: Remove temp dir
+      ansible.builtin.file:
+        path: "{{ build_dir.path }}"
+        state: absent

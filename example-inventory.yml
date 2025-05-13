@@ -1,8 +1,10 @@
 techzone:
   hosts:
-    my_host_1:
-      ansible_host: 8.8.8.8
-      ansible_password: super_secret_password
+    techzone:
+  # hosts:
+  #   my_host_1:
+  #     ansible_host: 8.8.8.8
+  #     ansible_password: super_secret_password
   vars:
     ansible_user: user1
     auto_start: true
@@ -19,3 +21,7 @@ techzone:
     llama_cpp_argv:
       api-key: examplekey01
       host: 0.0.0.0
+
+    # chroma db:
+    chroma_env_name: chromadb # name of the environment to install chroma in.
+    chroma_version: latest
