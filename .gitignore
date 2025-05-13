@@ -17,5 +17,11 @@ inventory.ini
 # local ansible configs:
 ansible.cfg
 
+# ansible-lint:
+.ansible/
+
 # log files:
 *.log
+
+# env files:
+*.env

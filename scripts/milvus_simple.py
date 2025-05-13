@@ -20,12 +20,17 @@ from pprint import pprint # pretty print
 import torch
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, utility, connections
 
 # milvus connection
 # leave first, otherwise the model is loaded before the connection is checked.
 milvus_uri = os.getenv("MILVUS_HOST") or "http://127.0.0.1:19530"
 mc = MilvusClient(milvus_uri)
+
+connections.connect(alias="version", uri=milvus_uri)
+print(f"Milvus version: { utility.get_server_version(using='version') }")
+connections.disconnect("version")
+
 print(f"milvus collections: { mc.list_collections() }")
 
 # change these as desired:

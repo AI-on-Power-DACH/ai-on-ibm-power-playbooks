@@ -73,6 +73,13 @@
       create: true
       mode: a=r,u=rwx
 
+     # temporary fix for current RHEL versions: moved install in front of repo addition
+   - name: Install openssl-devel to avoid conflicts
+     become: true
+     become_user: root
+     ansible.builtin.command:
+      cmd: yum install -y openssl-devel
+
    - name: Add yum Centos CRP repo
      become: true
      become_user: root
@@ -124,7 +131,7 @@
      ansible.builtin.command: 
       cmd: >
        yum install -y --allowerasing make wget git sudo curl zip unzip tar diffutils pkg-config python3-devel
-       perl-IPC-Cmd perl-Digest-SHA perl-FindBin perl-File-Compare openssl-devel scl-utils openblas-devel rust
+       perl-IPC-Cmd perl-Digest-SHA perl-FindBin perl-File-Compare scl-utils openblas-devel rust
        cargo gcc gcc-c++ libstdc++-static which libaio libuuid-devel ncurses-devel ccache libtool m4 autoconf
        automake ninja-build zlib-devel libffi-devel gfortran yum-utils patchelf hdf5-devel sqlite-devel bzip2-devel
        xz-devel perl-open.noarch
