@@ -34,7 +34,7 @@
         state: directory
 
     - name: Install micromamba
-      ansible.builtin.import_tasks: ../download-and-extract-micromamba.yml
+      ansible.builtin.import_tasks: ../support/download-and-extract-micromamba.yml
       when: not dest_stat.stat.exists
 
     - name: Copy Env files

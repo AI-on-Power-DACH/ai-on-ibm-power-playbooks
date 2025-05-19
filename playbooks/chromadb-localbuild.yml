@@ -69,14 +69,14 @@
     - name: Install Protobuf
       ansible.builtin.shell:
         chdir: "{{ build_dir.path }}"
-        cmd: curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v{{ protoc_version }}/protoc-{{ protoc_version }}-linux-ppcle_64.zip && unzip -o protoc-{{ protoc_version}}-linux-ppcle_64.zip -d $HOME/.local
+        cmd: curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v{{ protoc_version }}/protoc-{{ protoc_version }}-linux-ppcle_64.zip && unzip -o protoc-{{ protoc_version }}-linux-ppcle_64.zip -d $HOME/.local
 
     - name: "Check if micromamba already exists in {{ micromamba_location }}"
       ansible.builtin.stat:
         path: "{{ micromamba_location }}"
       register: mamba_stat
     - name: Install micromamba
-      ansible.builtin.import_tasks: ./download-and-extract-micromamba.yml
+      ansible.builtin.import_tasks: ./support/download-and-extract-micromamba.yml
       when: not mamba_stat.stat.exists
 
     - name: Check install env presence
