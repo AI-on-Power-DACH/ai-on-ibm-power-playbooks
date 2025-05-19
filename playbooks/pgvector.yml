@@ -1,5 +1,7 @@
 - name: Set up system
   hosts: all
+  vars:
+    base_dir: . # script specific
   tasks:
     - name: Ping my host
       ansible.builtin.ping:
@@ -40,7 +42,7 @@
         state: present
 
 - name: Import postgresql setup playbook
-  ansible.builtin.import_playbook: postgresql-setup.yml
+  ansible.builtin.import_playbook: "{{ base_dir }}/postgresql-setup.yml" 
   when: postgres_setup is defined and postgres_setup
 
 - name: Set up pgvector extension

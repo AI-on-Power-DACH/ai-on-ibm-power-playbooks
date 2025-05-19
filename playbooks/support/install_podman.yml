@@ -1,0 +1,8 @@
+- name: Install and prepare podman
+  tasks:
+   - name: Install podman
+     ansible.builtin.dnf:
+      name:
+        - podman
+      state: present
+   - name: 

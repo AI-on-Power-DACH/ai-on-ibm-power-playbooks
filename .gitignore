@@ -25,3 +25,6 @@ ansible.cfg
 
 # env files:
 *.env
+
+# open webui
+.webui_secret_key
