@@ -93,7 +93,7 @@
   vars:
     arch: linux-ppc64le
     version: latest
-    base_dir: ""
+    base_dir: "."
 
 - name: LLM setup
   hosts: techzone
@@ -196,7 +196,7 @@
     
     - name: Copy systemd service template for llama.cpp
       ansible.builtin.copy:
-        src: template.service
+        src: support/template.service
         dest: /etc/systemd/system/llama.cpp.service
         owner: "{{ ansible_user }}"
         mode: u=rw,g=r,o=rwx
