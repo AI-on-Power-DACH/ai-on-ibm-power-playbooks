@@ -1,0 +1,246 @@
+- name: System setup
+  hosts: techzone
+  tasks:
+    - name: Ping my host
+      ansible.builtin.ping:
+    
+    - name: Create working directory
+      ansible.builtin.file:
+        path: "{{ working_directory }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+
+    - name: Get RHEL version
+      ansible.builtin.shell: rpm -E %rhel
+      register: rhel_version
+
+    - name: Print RHEL version
+      ansible.builtin.debug:
+        msg: "RHEL version: {{ rhel_version.stdout }}"
+
+    - name: Add RPM key for EPEL
+      ansible.builtin.rpm_key:
+        state: present
+        key: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ rhel_version.stdout }}"
+      become: true
+      become_user: root
+
+    - name: Add RPM key for RPM Fusion (free)
+      ansible.builtin.rpm_key:
+        state: present
+        key: "https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-free-el-{{ rhel_version.stdout }}"
+      become: true
+      become_user: root
+
+    - name: Add RPM key for RPM Fusion (non-free)
+      ansible.builtin.rpm_key:
+        state: present
+        key: "https://rpmfusion.org/keys?action=AttachFile&do=get&target=RPM-GPG-KEY-rpmfusion-nonfree-el-{{ rhel_version.stdout }}"
+      become: true
+      become_user: root
+
+    - name: Install EPEL repository
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - dnf-plugins-core
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ rhel_version.stdout }}.noarch.rpm"
+        state: latest
+
+
+    - name: Enable powertools/codeready builder for RHEL (powertools under CentOS)
+      become: true
+      become_user: root
+      command: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
+
+    - name: Install RPM Fusion repository (for ffmpeg)
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-{{ rhel_version.stdout }}.noarch.rpm"
+          - "https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-{{ rhel_version.stdout }}.noarch.rpm"
+        state: latest
+
+    - name: Install the 'Development tools' package group
+      become: true
+      become_user: root
+      dnf:
+        name: '@Development tools'
+        state: present
+
+    - name: Install further system dependencies
+      become: true
+      become_user: root
+      dnf:
+        name:
+          - bzip2
+          - cmake
+          - curl
+          - ffmpeg
+          - gcc
+          - git
+          - openblas-devel
+          - libcurl-devel
+          - libxcrypt-compat
+        state: latest
+
+- name: Micromamba setup
+  hosts: techzone
+  tasks:
+    - name: "Check if micromamba already exists in {{ micromamba_location }}"
+      ansible.builtin.stat:
+        path: "{{ micromamba_location }}"
+      register: dest_stat
+
+    - name: Install micromamba
+      ansible.builtin.import_tasks: "{{ base_dir }}/support/download-and-extract-micromamba.yml"
+      when: not dest_stat.stat.exists
+
+    - name: Install basic Python dependencies
+      ansible.builtin.command:
+        argv:
+          - micromamba
+          - install
+          - --yes
+          - "--root-prefix={{ conda_dir }}"
+          - "--prefix={{ conda_dir }}"
+          - --channel=rocketce
+          - --channel=defaults
+          - "python={{ python_version }}"
+  vars:
+    arch: linux-ppc64le
+    version: latest
+    base_dir: "."
+
+- name: LLM setup
+  hosts: techzone
+  tasks:
+    - name: Populate service facts
+      ansible.builtin.service_facts:
+
+    - name: Stop already existing whisper.cpp service
+      ansible.builtin.systemd_service:
+        state: stopped
+        name: whisper.cpp
+      become: true
+      become_user: root
+      when: "'whisper.cpp.service' in services"
+
+    - name: Clone whisper.cpp repository
+      git:
+       repo: https://github.com/ggml-org/whisper.cpp.git
+       dest: "{{ working_directory }}/whisper.cpp"
+       clone: yes
+       force: true
+       update: yes
+    
+    - name: Create build directory
+      ansible.builtin.file:
+        path: "{{ working_directory }}/whisper.cpp/build"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: 0775
+        recurse: yes
+
+    - name: Build whisper.cpp with optimizations
+      ansible.builtin.shell: |
+        cmake -B build -DGGML_BLAS=1 -DGGML_BLAS_VENDOR=OpenBLAS;
+        cmake --build build --config Release;
+      args:
+        chdir: "{{ working_directory }}/whisper.cpp"
+      environment:
+        PATH: "/opt/rh/gcc-toolset-13/root/usr/bin:{{ ansible_env.PATH }}"
+
+    - name: Make server binary executable
+      ansible.builtin.file:
+        path: "{{ working_directory }}/whisper.cpp/build/bin/whisper-server"
+        owner: "{{ ansible_user }}"
+        mode: 0777
+    
+    - name: Install huggingface-cli
+      ansible.builtin.shell: |
+        python{{ python_version }} -m pip install -U "huggingface_hub[cli]"
+        
+    - name: Populate model path
+      ansible.builtin.set_fact:
+        model_dir: "{{ working_directory }}/models/{{ model_repository }}"
+
+    - name: Check if model file already exists
+      ansible.builtin.stat:
+        path: "{{ model_dir }}"
+      register: model_result
+        
+    - name: Download LLM
+      ansible.builtin.shell: |
+        huggingface-cli download \
+          {{ model_repository }} {{ model_file }} \
+          --local-dir {{ model_dir }}
+      when: not model_result.stat.exists
+    
+    - name: Build parameter list (-)
+      ansible.builtin.set_fact:
+        whisper_cpp_args: >-
+          {% set result = [] -%}
+          {% for key in whisper_cpp_args.keys() -%}
+            {% set ignored = result.extend(["-" + key, whisper_cpp_args[key] or ""]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: whisper_cpp_args is defined
+
+    - name: Build parameter list (--)
+      ansible.builtin.set_fact:
+        whisper_cpp_argv: >-
+          {% set result = [] -%}
+          {% for key in whisper_cpp_argv.keys() -%}
+            {% set ignored = result.extend(["--" + key, whisper_cpp_argv[key] or ""]) -%}
+          {%- endfor %}
+          {{ result | join(" ") }}
+      when: whisper_cpp_argv is defined
+
+    - name: Default whisper.cpp parameter list (-)
+      ansible.builtin.set_fact:
+        whisper_cpp_args: ""
+      when: whisper_cpp_args is not defined
+
+    - name: Default whisper.cpp parameter list (--)
+      ansible.builtin.set_fact:
+        whisper_cpp_argv: ""
+      when: whisper_cpp_argv is not defined
+
+    - name: Print parameter lists
+      ansible.builtin.debug:
+        msg: "Parameters: {{ whisper_cpp_args }} {{ whisper_cpp_argv }}"
+    
+    - name: Copy systemd service template for whisper.cpp
+      ansible.builtin.copy:
+        src: support/template.service
+        dest: /etc/systemd/system/whisper.cpp.service
+        owner: "{{ ansible_user }}"
+        mode: u=rw,g=r,o=rwx
+      become: true
+      become_user: root
+
+    - name: Insert service data into whisper.cpp service file
+      become: true
+      become_user: root
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/whisper.cpp.service
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backrefs: yes
+      loop:
+        - { regexp: "^Description=(.*)$", line: "Description=Whisper.cpp Service" }
+        - { regexp: "^ExecStart=(.*)$", line: "ExecStart={{ working_directory }}/whisper.cpp/build/bin/whisper-server -m {{ model_dir }}/{{ model_file }} {{ whisper_cpp_args }} {{ whisper_cpp_argv }}" }
+        - { regexp: "^User=(.*)$", line: "User={{ ansible_user }}" }
+
+    - name: Start whisper.cpp service
+      ansible.builtin.systemd_service:
+        state: started
+        daemon_reload: true
+        name: whisper.cpp
+      become: true
+      become_user: root
