@@ -171,7 +171,7 @@
 
     - name: Check if model file already exists
       ansible.builtin.stat:
-        path: "{{ model_dir }}"
+        path: "{{ model_dir }}/{{ model_file }}"
       register: model_result
         
     - name: Download LLM
