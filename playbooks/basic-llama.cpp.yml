@@ -3,14 +3,14 @@
   tasks:
     - name: Ping my host
       ansible.builtin.ping:
-    
+
     - name: Create working directory
       ansible.builtin.file:
         path: "{{ working_directory }}"
         state: directory
         owner: "{{ ansible_user }}"
         mode: 0775
-        recurse: yes
+        recurse: true
 
     - name: Get RHEL version
       ansible.builtin.shell: rpm -E %rhel
@@ -39,19 +39,20 @@
     - name: Enable powertools/codeready builder for RHEL (powertools under CentOS)
       become: true
       become_user: root
-      command: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
+      ansible.builtin.command:
+        cmd: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
 
     - name: Install the 'Development tools' package group
       become: true
       become_user: root
-      dnf:
+      ansible.builtin.dnf:
         name: '@Development tools'
         state: present
 
     - name: Install further system dependencies
       become: true
       become_user: root
-      dnf:
+      ansible.builtin.dnf:
         name:
           - bzip2
           - cmake
@@ -110,25 +111,27 @@
       when: "'llama.cpp.service' in services"
 
     - name: Clone llama.cpp repository
-      git:
-       repo: https://github.com/ggerganov/llama.cpp.git
-       dest: "{{ working_directory }}/llama.cpp"
-       clone: yes
-       force: true
-       update: yes
-    
+      ansible.builtin.git:
+        repo: https://github.com/ggerganov/llama.cpp.git
+        dest: "{{ working_directory }}/llama.cpp"
+        clone: true
+        single_branch: true
+        version: "{{ llamacpp_version | default('master') }}"
+        force: true
+        update: true
+
     - name: Create build directory
       ansible.builtin.file:
         path: "{{ working_directory }}/llama.cpp/build"
         state: directory
         owner: "{{ ansible_user }}"
         mode: 0775
-        recurse: yes
+        recurse: true
 
     - name: Build llama.cpp with optimizations
       ansible.builtin.shell: |
         cmake -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS ..;
-        cmake --build . --config Release -j 8;
+        cmake --build . --config Release -j $(nproc);
       args:
         chdir: "{{ working_directory }}/llama.cpp/build"
       environment:
@@ -139,11 +142,11 @@
         path: "{{ working_directory }}/llama.cpp/build/bin/llama-server"
         owner: "{{ ansible_user }}"
         mode: 0777
-    
+ 
     - name: Install huggingface-cli
       ansible.builtin.shell: |
         python{{ python_version }} -m pip install -U "huggingface_hub[cli]"
-        
+
     - name: Populate model path
       ansible.builtin.set_fact:
         model_path: "{{ working_directory }}/models/{{ model_repository }}"
@@ -152,14 +155,14 @@
       ansible.builtin.stat:
         path: "{{ model_path }}"
       register: model_result
-        
+
     - name: Download LLM
       ansible.builtin.shell: |
         huggingface-cli download \
           {{ model_repository }} {{ model_file }} \
           --local-dir {{ model_path }}
       when: not model_result.stat.exists
-    
+
     - name: Build parameter list (-)
       ansible.builtin.set_fact:
         llama_cpp_args: >-
@@ -193,7 +196,7 @@
     - name: Print parameter lists
       ansible.builtin.debug:
         msg: "Parameters: {{ llama_cpp_args }} {{ llama_cpp_argv }}"
-    
+
     - name: Copy systemd service template for llama.cpp
       ansible.builtin.copy:
         src: support/template.service
@@ -208,7 +211,7 @@
         path: /etc/systemd/system/llama.cpp.service
         regexp: "^Description=(.*)$"
         line: "Description=Llama.cpp Service"
-        backrefs: yes
+        backrefs: true
       become: true
       become_user: root
 
@@ -217,7 +220,7 @@
         path: /etc/systemd/system/llama.cpp.service
         regexp: "^ExecStart=(.*)$"
         line: "ExecStart={{ working_directory }}/llama.cpp/build/bin/llama-server -m {{ working_directory }}/models/{{ model_repository }}/{{ model_file }} {{ llama_cpp_args }} {{ llama_cpp_argv }}"
-        backrefs: yes
+        backrefs: true
       become: true
       become_user: root
 
@@ -226,7 +229,7 @@
         path: /etc/systemd/system/llama.cpp.service
         regexp: "^User=(.*)$"
         line: "User={{ ansible_user }}"
-        backrefs: yes
+        backrefs: true
       become: true
       become_user: root
 
