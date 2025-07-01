@@ -110,6 +110,21 @@
       become_user: root
       when: "'llama.cpp.service' in services"
 
+    - name: Fetch latest version
+      ansible.builtin.shell:
+        cmd: curl https://api.github.com/repos/ggml-org/llama.cpp/releases/latest -s | jq .name -r
+      register: llamacpp_latest_version
+      when: llamacpp_version is undefined
+
+    - name: Set clone version
+      when: llamacpp_version is undefined
+      ansible.builtin.set_fact:
+        llamacpp_version: "{{ llamacpp_latest_version.stdout | trim | default('master')}}"
+
+    - name: Print Version
+      ansible.builtin.debug:
+        msg: "Using llama.cpp Version '{{ llamacpp_version }}'"
+
     - name: Clone llama.cpp repository
       ansible.builtin.git:
         repo: https://github.com/ggerganov/llama.cpp.git
