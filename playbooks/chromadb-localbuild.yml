@@ -98,7 +98,7 @@
           - --channel=rocketce
           - --channel=defaults
           - python={{ python_version }}
-      when: not mamba_install_env.stdout == chroma_env_name
+      when: not mamba_install_env.stdout == chroma_env_name | default('chroma')
 
     - name: Install Build Tools
       ansible.builtin.command:
