@@ -57,12 +57,29 @@
           - bzip2
           - cmake
           - curl
-          - gcc-toolset-13
           - git
           - openblas-devel
           - libcurl-devel
           - libxcrypt-compat
         state: latest
+
+    - name: Install gcc-toolset (RHEL < 10)
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - gcc-toolset-13
+        state: latest
+      when: rhel_version.stdout | float < 10
+
+    - name: Install gcc (RHEL >= 10)
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - gcc
+        state: latest
+      when: rhel_version.stdout | float >= 10
 
 - name: Micromamba setup
   hosts: techzone
