@@ -31,7 +31,7 @@
     state: absent
 
 - name: Create shell function for micromamba
-  ansible.builtin.shell: "micromamba shell init --shell=bash"
+  ansible.builtin.shell: "micromamba --root-prefix='{{ conda_dir }}' shell init --shell=bash"
     
 - name: Activate micromamba environment
   ansible.builtin.shell: "echo 'micromamba activate --prefix={{ conda_dir }}' >> /home/{{ ansible_user }}/.bashrc"

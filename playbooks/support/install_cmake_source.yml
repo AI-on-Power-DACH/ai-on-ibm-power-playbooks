@@ -1,0 +1,76 @@
+# Installs Cmake from source
+#
+# Parameters:
+# - cmake_version: The version of cmake to install (without leading v)
+# - cmake_path: The directory under which cmake will install it's bin directory.
+#               NOTE: you should add {{ cmake_path }}/bin to you $PATH!
+- name: Install CMake
+  hosts: techzone
+  tasks:
+    - name: Create tmp dir
+      ansible.builtin.tempfile:
+        state: directory
+      register: dload_dir
+
+    - name: Check prexisting cmake version
+      ansible.builtin.shell:
+        cmd: set -o pipefail && cmake --version | head -1 | cut -f3 -d" "
+      changed_when: false
+      failed_when: false
+      register: cmake_curr_version
+
+    - name: Download cmake {{ cmake_version }}
+      ansible.builtin.get_url:
+        url: https://github.com/Kitware/CMake/releases/download/v{{ cmake_version }}/cmake-{{ cmake_version }}.tar.gz
+        dest: "{{ dload_dir.path }}/cmake.tar.gz"
+        mode: a+rw
+      when: cmake_curr_version.stdout != cmake_version
+
+    - name: Create {{ cmake_path }}
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: a=rx,u=rwx,g=rx
+        path: "{{ cmake_path }}"
+      when: cmake_curr_version.stdout != cmake_version
+
+    - name: Extract cmake
+      ansible.builtin.unarchive:
+        src: "{{ dload_dir.path }}/cmake.tar.gz"
+        dest: "{{ dload_dir.path }}"
+        remote_src: true
+      when: cmake_curr_version.stdout != cmake_version
+
+    - name: Run cmake bootstrap
+      ansible.builtin.shell:
+        cmd: ./bootstrap --prefix={{ cmake_path }} --parallel=$(nproc) -- -DBUILD_TESTING:BOOL=OFF -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_USE_OPENSSL:BOOL=ON
+        chdir: "{{ dload_dir.path }}/cmake-{{ cmake_version }}"
+      when: cmake_curr_version.stdout != cmake_version
+
+    - name: Build and install cmake {{ cmake_version }}
+      become: true
+      become_user: root
+      ansible.builtin.shell:
+        chdir: "{{ dload_dir.path }}/cmake-{{ cmake_version }}"
+        # full paths since the root shell (using /bin/sh) does not parse /etc/profile.d/
+        cmd: "make install -j$(nproc)"
+      when: cmake_curr_version.stdout != cmake_version
+
+    - name: Check cmake version
+      ansible.builtin.shell:
+        cmd: set -o pipefail && cmake --version | head -1 | cut -f3 -d" "
+      changed_when: false
+      register: new_cmake_version
+      when: cmake_curr_version.stdout != cmake_version
+
+    - name: Print cmake version
+      ansible.builtin.debug:
+        msg: "{{ new_cmake_version.stdout }}"
+      when: cmake_curr_version.stdout != cmake_version
+
+    - name: Remove temporary directory
+      ansible.builtin.file:
+        path: "{{ dload_dir.path }}"
+        state: absent

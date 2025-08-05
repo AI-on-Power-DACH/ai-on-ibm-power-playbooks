@@ -1,5 +1,7 @@
 - name: System setup
   hosts: techzone
+  vars:
+    cmake_path: /usr/local/cmake
   tasks:
     - name: Ping my host
       ansible.builtin.ping:
@@ -49,7 +51,11 @@
       become: true
       become_user: root
       ansible.builtin.dnf:
-        name: '@Development tools'
+        name:
+          - '@Development tools'
+          - 'llvm-toolset'
+          - 'gcc-gfortran'
+          
         state: present
 
     - name: Install further system dependencies
@@ -59,8 +65,6 @@
         name:
           - bzip2
           - ccache
-          - gcc-toolset-12
-          - gcc-toolset-13
           - git
           - numactl-devel
         state: present
@@ -69,10 +73,21 @@
       ansible.builtin.shell: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y;
 
+    - name: Add $PATH entries
+      become: true
+      become_user: root
+      ansible.builtin.blockinfile:
+        path: "/etc/profile.d/vllm.sh"
+        append_newline: true
+        create: true
+        mode: u+rwx,o+r,a+r
+        block: |
+          export PATH="$PATH:{{ cmake_path }}/bin"
+          export PIP_PREFER_BINARY=true
+          export PIP_EXTRA_INDEX_URL="https://wheels.developerfirst.ibm.com/devpi/linux-ppc64le https://repo.fury.io/mgiessing"
+
 - name: Micromamba setup
   hosts: techzone
-  vars:
-    base_dir: ../
   tasks:
     - name: "Check if micromamba already exists in {{ micromamba_location }}"
       ansible.builtin.stat:
@@ -101,6 +116,14 @@
     arch: linux-ppc64le
     version: latest
 
+- name: Install Cmake
+  ansible.builtin.import_playbook: "{{ base_dir }}/support/install_cmake_source.yml"
+  vars:
+    cmake_version: 4.0.3
+    cmake_path: /usr/local/cmake
+    base_dir: ../
+
+
 - name: vLLM build
   hosts: techzone
   vars:
@@ -109,8 +132,7 @@
   tasks:
     - name: Install cmake for building protobuf and vllm
       ansible.builtin.shell: |
-        python{{ python_version }} -m pip install --prefer-binary --extra-index-url https://repo.fury.io/mgiessing \
-          "cmake>=3.26" \
+        python{{ python_version }} -m pip install \
           ninja;
 
     - name: Clone openblas repository
@@ -177,23 +199,14 @@
         single_branch: true
         version: v2.7.0
 
-    - name: Build psutil from source as no wheels for ppc64le exist currently
-      ansible.builtin.shell: |
-        python{{ python_version }} -m pip install --no-binary :all: psutil;
-
     - name: Install pytorch dependencies
       ansible.builtin.shell: |
+        CC=$(which gcc) \
+        CXX=$(which g++) \
         python{{ python_version }} -m pip install \
           -r requirements.txt;
       args:
         chdir: "{{ working_directory }}/pytorch"
-
-    - name: Change pytorch version for discovery (bug in official repository)
-      ansible.builtin.lineinfile:
-        path: "{{ working_directory }}/pytorch/version.txt"
-        regexp: "^2(.*)$"
-        line: "2.6.0"
-        backrefs: true
 
     - name: Increase minimum version in files to support newer cmake versions
       ansible.builtin.lineinfile:
@@ -211,8 +224,8 @@
 
     - name: Build pytorch
       ansible.builtin.shell: |
-        CC=/opt/rh/gcc-toolset-13/root/usr/bin/gcc \
-        CXX=/opt/rh/gcc-toolset-13/root/usr/bin/g++ \
+        CC=$(which gcc) \
+        CXX=$(which g++) \
         USE_GLOO=True USE_OPENMP=1 ATEN_THREADING=OMP USE_FBGEMM=0 USE_XPU=0 \
         USE_CUDA=0 USE_ROCM=0 USE_NNPACK=0 USE_XNNPACK=0 USE_QNNPACK=0 USE_PYTORCH_QNNPACK=0 USE_DISTRIBUTED=1 \
         USE_TENSORPIPE=1 BLAS=OpenBLAS BUILD_TEST=0 MAX_JOBS=16 python{{ python_version }} setup.py install;
@@ -229,9 +242,13 @@
         single_branch: true
         version: v0.20.0
 
-    - name: Build torchvision
+    - name: Upgrade libstdc++
       ansible.builtin.command:
-        cmd: python{{ python_version }} setup.py develop
+        cmd: micromamba update libstdcxx-ng -c conda-forge -y
+
+    - name: Build torchvision
+      ansible.builtin.shell:
+        cmd: CC=$(which gcc) CXX=$(which g++) python{{ python_version }} setup.py develop
         chdir: "{{ working_directory }}/vision"
 
     - name: Clone vllm repository
@@ -241,6 +258,8 @@
         clone: true
         force: true
         update: true
+        single_branch: true
+        version: "v0.9.2" # current working version.
 
     - name: Install xformers for better dependency resolution
       ansible.builtin.command:
@@ -263,9 +282,13 @@
       ansible.builtin.command:
         cmd: python3.11 -m pip install {{ working_directory }}/hf_xet-{{ hf_xet_version }}-cp37-abi3-linux_ppc64le.whl
 
+    - name: Remove python cmake version
+      ansible.builtin.shell:
+        cmd: python{{ python_version }} -m pip uninstall --yes cmake 
+
     - name: Install vllm dependencies
       ansible.builtin.shell: |
-        python{{ python_version }} -m pip install --prefer-binary --extra-index-url https://repo.fury.io/mgiessing \
+        python{{ python_version }} -m pip install  \
             ninja packaging "setuptools-scm>=8" setuptools wheel jinja2 datasets "torchaudio==2.7.0" \
             -r requirements/common.txt \
             uvloop==0.20.0
@@ -285,6 +308,10 @@
     - name: Build vllm
       ansible.builtin.shell:
         cmd: cd {{ working_directory }}/vllm && CMAKE_PREFIX_PATH=${HOME}/protbuf/lib64/cmake/protobuf VLLM_TARGET_DEVICE=cpu python setup.py install
+
+    - name: Downgrade transformers due to bug
+      ansible.builtin.shell:
+        cmd: python{{ python_version }} -m pip install "transformers<4.54.0"
 
 - name: LLM setup
   hosts: techzone
