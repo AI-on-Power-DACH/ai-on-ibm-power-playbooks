@@ -36,6 +36,8 @@
       create: true
       mode: a=r,u=rwx
 
+    # TODO: When target includes localhost: source file!!!
+
    - name: Set Linker path
      become: true
      become_user: root
@@ -72,6 +74,12 @@
       insertafter: EOF
       create: true
       mode: a=r,u=rwx
+
+   - name: Reload Milvus env variables on localhost
+     ansible.builtin.command:
+        cmd: source /etc/profile.d/milvus_env.sh
+     when: inventory_hostname == "localhost"
+     changed_when: false
 
      # temporary fix for current RHEL versions: moved install in front of repo addition
    - name: Install openssl-devel to avoid conflicts

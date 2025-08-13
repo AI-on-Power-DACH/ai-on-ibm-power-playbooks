@@ -25,26 +25,23 @@
     - name: Setup PIP Repo (fury.io/mgiesing)
       become: true
       become_user: root
-      ansible.builtin.lineinfile:
+      ansible.builtin.blockinfile:
         dest: /etc/profile.d/pip_setup.sh
-        line: export PIP_EXTRA_INDEX_URL=https://repo.fury.io/mgiessing
+        block: |
+          export PIP_EXTRA_INDEX_URL=https://repo.fury.io/mgiessing
+          export PIP_PREFER_BINARY=true
         owner: root
         state: present
         insertafter: EOF
+        append_newline: true
         create: true
         mode: a=r,u=rwx
 
-    - name: Setup PIP for binaries
-      become: true
-      become_user: root
-      ansible.builtin.lineinfile:
-        dest: /etc/profile.d/pip_setup.sh
-        line: export PIP_PREFER_BINARY=true
-        owner: root
-        state: present
-        insertafter: EOF
-        create: true
-        mode: a=r,u=rwx
+    - name: Reload profile variables on localhost
+      ansible.builtin.command:
+        cmd: source /etc/profile.d/pip_setup.sh
+      when: inventory_hostname == "localhost"
+      changed_when: false
 
     - name: Install dependencies
       become: true

@@ -59,7 +59,7 @@
      ansible.builtin.raw: |
       cd {{ working_directory }} && ./milvus_embed.sh start -e {{ milvus_etcd_port | default('2379') | quote }} -m {{ milvus_port | default('19530') | quote }}
      when: container_status.rc == 1 and auto_start
- 
+
    - name: Run Container health probe
      ansible.builtin.command: 
       cmd: curl -f http://localhost:9091/healthz

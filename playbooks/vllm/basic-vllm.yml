@@ -86,6 +86,12 @@
           export PIP_PREFER_BINARY=true
           export PIP_EXTRA_INDEX_URL="https://wheels.developerfirst.ibm.com/devpi/linux-ppc64le https://repo.fury.io/mgiessing"
 
+    - name: Reload Path variables on localhost
+      ansible.builtin.command:
+        cmd: source /etc/profile.d/vllm.sh
+      when: inventory_hostname == "localhost"
+      changed_when: false
+
 - name: Micromamba setup
   hosts: techzone
   tasks:

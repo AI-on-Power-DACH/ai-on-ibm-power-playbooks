@@ -4,7 +4,7 @@
     state: directory
     owner: "{{ ansible_user }}"
     mode: 0775
-    recurse: yes
+    recurse: true
 
 - name: Create temporary directory
   ansible.builtin.tempfile:
@@ -32,6 +32,12 @@
 
 - name: Create shell function for micromamba
   ansible.builtin.shell: "micromamba --root-prefix='{{ conda_dir }}' shell init --shell=bash"
-    
+
 - name: Activate micromamba environment
   ansible.builtin.shell: "echo 'micromamba activate --prefix={{ conda_dir }}' >> /home/{{ ansible_user }}/.bashrc"
+
+- name: Reload Shell on localhost
+  ansible.builtin.command:
+    cmd: source /home/{{ ansible_user }}/.bashrc
+  when: inventory_hostname == "localhost"
+  changed_when: false
