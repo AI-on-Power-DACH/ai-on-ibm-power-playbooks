@@ -1,0 +1,86 @@
+---
+- name: Setup project venv
+  hosts: all
+  tasks:
+
+    - name: Install python version {{ python_version }}
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - python{{ python_version }}
+          - python{{ python_version }}-pip
+        state: present
+
+    - name: Install virtualenv
+      ansible.builtin.pip:
+        name: virtualenv
+        executable: pip{{ python_version }}
+        state: present
+
+    - name: Check venv presence
+      ansible.builtin.stat:
+        path: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/activate"
+      register: venv_present
+
+    - name: Create venv in {{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/
+      ansible.builtin.pip:
+        name:
+          - pip
+        virtualenv: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/"
+        virtualenv_python: python{{ python_version }}
+        state: present
+      when: not venv_present.stat.exists
+
+    # Adding PIP variable adaptions when activating as inspired by
+    # https://stackoverflow.com/a/69119730/7976470
+    - name: Add pip environment config to venv
+      ansible.builtin.blockinfile:
+        path: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/activate"
+        block: |
+          if [ -n "${PIP_PREFER_BINARY:-}" ] ; then
+              _OLD_PIP_BINARY="${PIP_PREFER_BINARY:-}"
+          fi
+          export PIP_PREFER_BINARY=1
+          if [ -n "${PIP_EXTRA_INDEX_URL:-}" ] ; then
+              _OLD_PIP_INDEX="${PIP_EXTRA_INDEX_URL:-}"
+          fi
+          export PIP_EXTRA_INDEX_URL="https://wheels.developerfirst.ibm.com/devpi/linux-ppc64le https://repo.fury.io/mgiessing"
+        state: present
+        insertafter: EOF
+        marker: "# {mark} activate block"  # marker is required for multiple blocks on same file.
+        append_newline: true
+
+
+    - name: Add reset environment configuration on venv deactivation
+      ansible.builtin.blockinfile:
+        path: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/activate"
+        block: |
+          if [ ! "${1:-}" = "nondestructive" ] ; then
+              if [ -n "${_OLD_PIP_INDEX:-}" ] ; then
+                  PIP_EXTRA_INDEX_URL="${_OLD_PIP_INDEX:-}"
+                  export PIP_EXTRA_INDEX_URL
+                  unset _OLD_PIP_INDEX
+              else
+                  unset PIP_EXTRA_INDEX_URL
+              fi
+          fi
+
+          if [ ! "${1:-}" = "nondestructive" ] ; then
+              if [ -n "${_OLD_PIP_BINARY:-}" ] ; then
+                  PIP_PREFER_BINARY="${_OLD_PIP_BINARY:-}"
+                  export PIP_PREFER_BINARY
+                  unset _OLD_PIP_BINARY
+              else
+                  unset PIP_PREFER_BINARY
+              fi
+          fi
+        state: present
+        insertafter: '(?m)deactivate \(\) {(?:\n^ *$|\n^ {4,}.*$)+'
+        append_newline: true
+        marker: "# {mark} deactivate block"
+        prepend_newline: true
+
+    - name: Export venv dir
+      ansible.builtin.set_fact:
+        venv_dir: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}"
