@@ -88,7 +88,7 @@
     # skip the entire Micromamba setup play if pip should be used.
     - name: Check Mamba vs pip
       ansible.builtin.meta: end_play
-      when: use_pip | default(false)
+      when: use_pip | default(false) | bool
 
     - name: "Check if micromamba already exists in {{ micromamba_location }}"
       ansible.builtin.stat:
@@ -133,7 +133,7 @@
   ansible.builtin.import_playbook: "{{ base_dir }}/support/setup-python-venv.yml"
   vars:
     base_dir: .
-  when: use_pip | default(false)
+  when: use_pip | default(false) | bool
 
 - name: LLM setup
   hosts: techzone
@@ -145,16 +145,16 @@
       ansible.builtin.set_fact:
         python_command: "{{ venv_python }}"
         python_bin: "{{ venv_bin }}/"
-      when: use_pip | default(false)
+      when: use_pip | default(false) | bool
 
     - name: Set Micromamba python facts
       ansible.builtin.set_fact:
         python_command: "{{ conda_dir }}/envs/llm/bin/python"
         python_bin: "{{ conda_dir }}/envs/llm/bin/"
-      when: not use_pip | default(false)
+      when: not use_pip | default(false) | bool
 
     - name: Install venv dependencies
-      when: use_pip | default(false)
+      when: use_pip | default(false) | bool
       ansible.builtin.command:
         cmd: '{{ python_command }} -m pip install numpy torch sentencepiece gguf --prefer-binary --extra-index-url "https://wheels.developerfirst.ibm.com/ppc64le/linux https://repo.fury.io/mgiessing"'
       changed_when: false
@@ -217,7 +217,7 @@
 
     - name: Install huggingface-cli
       ansible.builtin.shell: |
-        {{ python_command }} -m pip install -U "huggingface_hub[cli]"
+        {{ python_command }} -m pip install -U "huggingface_hub[cli,hf_xet]"
 
     - name: Populate model path
       ansible.builtin.set_fact:
