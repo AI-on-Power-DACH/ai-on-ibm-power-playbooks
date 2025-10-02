@@ -7,12 +7,12 @@
 # venv exists already. Furthermore the `IP_EXTRA_INDEX_URL` and `IP_PREFER_BINARY` variables
 # will be set to pull from IBMs ppc64le repository for better package support.
 #
-# After executing this playbook the variable `venv_dir` will be available to use the venv.
+# After executing this playbook the variables `venv_dir`, `venv_pip` and `venv_python` will be available to use the venv.
 # To run a simple python command in the venv without activating it use the python executable
-# inside the venv_dir. for example:
+# inside the venv; for example:
 # ```ansible
 # - ansible.builtin.command:
-#     cmd: "{{ venv_dir }}/bin/python main.py"
+#     cmd: "{{ venv_python }} main.py"
 # ```
 #
 # Parameters:
@@ -21,9 +21,16 @@
 #
 # Outputs:
 # - venv_dir (path): Main directory of the venv.
+# - venv_python (path): The python executable of the venv. Can be run without prior venv activation.
+# - venv_pip (path):  The pip executable of the venv. Also accessible without venv activation
+# - venv_bin (path): The path to the bin directory of the venv which contains all python cli tools.
 ---
 - name: Setup project venv
   hosts: all
+  vars:
+    pip_env:
+      PIP_EXTRA_INDEX_URL: "https://wheels.developerfirst.ibm.com/ppc64le/linux  https://repo.fury.io/mgiessing"
+      PIP_PREFER_BINARY: "1"
   tasks:
 
     - name: Install python {{ python_version }}
@@ -32,6 +39,7 @@
       ansible.builtin.dnf:
         name:
           - python{{ python_version }}
+          - python{{ python_version }}-devel
           - python{{ python_version }}-pip
         state: present
 
@@ -68,7 +76,7 @@
           if [ -n "${PIP_EXTRA_INDEX_URL:-}" ] ; then
               _OLD_PIP_INDEX="${PIP_EXTRA_INDEX_URL:-}"
           fi
-          export PIP_EXTRA_INDEX_URL="https://wheels.developerfirst.ibm.com/devpi/linux-ppc64le https://repo.fury.io/mgiessing"
+          export PIP_EXTRA_INDEX_URL="{{ pip_env.PIP_EXTRA_INDEX_URL }}"
         state: present
         insertafter: EOF
         marker: "# {mark} activate block"  # marker is required for multiple blocks on same file.
@@ -78,7 +86,7 @@
     - name: Add environment configuration reset on venv deactivation
       ansible.builtin.blockinfile:
         path: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/activate"
-        block: |
+        block: |2
           if [ ! "${1:-}" = "nondestructive" ] ; then
               if [ -n "${_OLD_PIP_INDEX:-}" ] ; then
                   PIP_EXTRA_INDEX_URL="${_OLD_PIP_INDEX:-}"
@@ -105,6 +113,9 @@
         marker: "# {mark} deactivate block"
         prepend_newline: true
 
-    - name: Export venv dir
+    - name: Export venv vars
       ansible.builtin.set_fact:
         venv_dir: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}"
+        venv_python: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/python"
+        venv_pip: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/pip"
+        venv_bin: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/"
