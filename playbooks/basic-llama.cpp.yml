@@ -11,6 +11,7 @@
         owner: "{{ ansible_user }}"
         mode: 0775
         recurse: true
+        follow: false
 
     - name: Get RHEL version
       ansible.builtin.shell: rpm -E %rhel
@@ -84,6 +85,11 @@
 - name: Micromamba setup
   hosts: techzone
   tasks:
+    # skip the entire Micromamba setup play if pip should be used.
+    - name: Check Mamba vs pip
+      ansible.builtin.meta: end_play
+      when: use_pip | default(false)
+
     - name: "Check if micromamba already exists in {{ micromamba_location }}"
       ansible.builtin.stat:
         path: "{{ micromamba_location }}"
@@ -123,11 +129,35 @@
     version: latest
     base_dir: "."
 
+- name: Venv setup
+  ansible.builtin.import_playbook: "{{ base_dir }}/support/setup-python-venv.yml"
+  vars:
+    base_dir: .
+  when: use_pip | default(false)
+
 - name: LLM setup
   hosts: techzone
   tasks:
     - name: Populate service facts
       ansible.builtin.service_facts:
+
+    - name: Set Venv python facts
+      ansible.builtin.set_fact:
+        python_command: "{{ venv_python }}"
+        python_bin: "{{ venv_bin }}/"
+      when: use_pip | default(false)
+
+    - name: Set Micromamba python facts
+      ansible.builtin.set_fact:
+        python_command: "{{ conda_dir }}/envs/llm/bin/python"
+        python_bin: "{{ conda_dir }}/envs/llm/bin/"
+      when: not use_pip | default(false)
+
+    - name: Install venv dependencies
+      when: use_pip | default(false)
+      ansible.builtin.command:
+        cmd: '{{ python_command }} -m pip install numpy torch sentencepiece gguf --prefer-binary --extra-index-url "https://wheels.developerfirst.ibm.com/ppc64le/linux https://repo.fury.io/mgiessing"'
+      changed_when: false
 
     - name: Stop already existing llama.cpp service
       ansible.builtin.systemd_service:
@@ -184,10 +214,10 @@
         path: "{{ working_directory }}/llama.cpp/build/bin/llama-server"
         owner: "{{ ansible_user }}"
         mode: 0777
- 
+
     - name: Install huggingface-cli
       ansible.builtin.shell: |
-        {{ conda_dir }}/envs/llm/bin/python -m pip install -U "huggingface_hub[cli,hf_xet]"
+        {{ python_command }} -m pip install -U "huggingface_hub[cli]"
 
     - name: Populate model path
       ansible.builtin.set_fact:
@@ -200,7 +230,7 @@
 
     - name: Download LLM
       ansible.builtin.shell: |
-        {{ conda_dir }}/envs/llm/bin/huggingface-cli download \
+        {{ python_bin }}/hf download \
           {{ model_repository }} {{ model_file }} \
           --local-dir {{ model_path }}
       when: not model_result.stat.exists
@@ -239,41 +269,62 @@
       ansible.builtin.debug:
         msg: "Parameters: {{ llama_cpp_args }} {{ llama_cpp_argv }}"
 
-    - name: Copy systemd service template for llama.cpp
-      ansible.builtin.copy:
-        src: support/template.service
-        dest: /etc/systemd/system/llama.cpp.service
+    - name: Create Systemd Service for llama.cpp
+      become: true
+      become_user: root
+      ansible.builtin.blockinfile:
+        create: true
+        mode: u=rw,g=r,o=r
         owner: "{{ ansible_user }}"
-        mode: u=rw,g=r,o=rwx
-      become: true
-      become_user: root
-
-    - name: Insert service name into llama.cpp service file
-      ansible.builtin.lineinfile:
         path: /etc/systemd/system/llama.cpp.service
-        regexp: "^Description=(.*)$"
-        line: "Description=Llama.cpp Service"
-        backrefs: true
-      become: true
-      become_user: root
+        block: |
+          [Unit]
+          Description=Llama.cpp Service
 
-    - name: Insert entrypoint into llama.cpp service file
-      ansible.builtin.lineinfile:
-        path: /etc/systemd/system/llama.cpp.service
-        regexp: "^ExecStart=(.*)$"
-        line: "ExecStart={{ working_directory }}/llama.cpp/build/bin/llama-server -m {{ working_directory }}/models/{{ model_repository }}/{{ model_file }} {{ llama_cpp_args }} {{ llama_cpp_argv }}"
-        backrefs: true
-      become: true
-      become_user: root
+          [Service]
+          Type=simple
+          ExecStart={{ working_directory }}/llama.cpp/build/bin/llama-server -m {{ working_directory }}/models/{{ model_repository }}/{{ model_file }} {{ llama_cpp_args }} {{ llama_cpp_argv }}
+          User={{ ansible_user }}
 
-    - name: Insert user into llama.cpp service file
-      ansible.builtin.lineinfile:
-        path: /etc/systemd/system/llama.cpp.service
-        regexp: "^User=(.*)$"
-        line: "User={{ ansible_user }}"
-        backrefs: true
-      become: true
-      become_user: root
+          [Install]
+          WantedBy=multi-user.target
+
+
+    # - name: Copy systemd service template for llama.cpp
+    #   ansible.builtin.copy:
+    #     src: support/template.service
+    #     dest: /etc/systemd/system/llama.cpp.service
+    #     owner: "{{ ansible_user }}"
+    #     mode: u=rw,g=r,o=rwx
+    #   become: true
+    #   become_user: root
+
+    # - name: Insert service name into llama.cpp service file
+    #   ansible.builtin.lineinfile:
+    #     path: /etc/systemd/system/llama.cpp.service
+    #     regexp: "^Description=(.*)$"
+    #     line: "Description=Llama.cpp Service"
+    #     backrefs: true
+    #   become: true
+    #   become_user: root
+
+    # - name: Insert entrypoint into llama.cpp service file
+    #   ansible.builtin.lineinfile:
+    #     path: /etc/systemd/system/llama.cpp.service
+    #     regexp: "^ExecStart=(.*)$"
+    #     line: "ExecStart=y
+    #     backrefs: true
+    #   become: true
+    #   become_user: root
+
+    # - name: Insert user into llama.cpp service file
+    #   ansible.builtin.lineinfile:
+    #     path: /etc/systemd/system/llama.cpp.service
+    #     regexp: "^User=(.*)$"
+    #     line: "User={{ ansible_user }}"
+    #     backrefs: true
+    #   become: true
+    #   become_user: root
 
     - name: Start llama.cpp service
       ansible.builtin.systemd_service:

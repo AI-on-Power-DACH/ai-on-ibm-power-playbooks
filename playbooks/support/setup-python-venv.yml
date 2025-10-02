@@ -1,9 +1,32 @@
+# Ansible playbook that installs a python version and sets up a venv under
+# the current working directory.
+#
+# This playbook will install the python version including pip, then
+# install the virtualenv package globally via pip and finally setup a new
+# empty venv under {{ working_directory }}/{{ python_venv_dirname }} if no such
+# venv exists already. Furthermore the `IP_EXTRA_INDEX_URL` and `IP_PREFER_BINARY` variables
+# will be set to pull from IBMs ppc64le repository for better package support.
+#
+# After executing this playbook the variable `venv_dir` will be available to use the venv.
+# To run a simple python command in the venv without activating it use the python executable
+# inside the venv_dir. for example:
+# ```ansible
+# - ansible.builtin.command:
+#     cmd: "{{ venv_dir }}/bin/python main.py"
+# ```
+#
+# Parameters:
+# - python_version (str): The python version to install in dot form (e.g. 3.12)
+# - working_directory (path): The directory into which a venv should be installed
+#
+# Outputs:
+# - venv_dir (path): Main directory of the venv.
 ---
 - name: Setup project venv
   hosts: all
   tasks:
 
-    - name: Install python version {{ python_version }}
+    - name: Install python {{ python_version }}
       become: true
       become_user: root
       ansible.builtin.dnf:
@@ -52,7 +75,7 @@
         append_newline: true
 
 
-    - name: Add reset environment configuration on venv deactivation
+    - name: Add environment configuration reset on venv deactivation
       ansible.builtin.blockinfile:
         path: "{{ working_directory }}/{{ python_venv_dirname | default('.venv') }}/bin/activate"
         block: |
@@ -76,6 +99,7 @@
               fi
           fi
         state: present
+        # regex matching to the end of the deactivate function defined in the bin/activate script:
         insertafter: '(?m)deactivate \(\) {(?:\n^ *$|\n^ {4,}.*$)+'
         append_newline: true
         marker: "# {mark} deactivate block"

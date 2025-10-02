@@ -385,6 +385,20 @@
         mode: u=rw,g=r,o=rwx
       when: vllm_environment is not defined
 
+    - name: Get Available Core Count
+      ansible.builtin.command:
+        cmd: nproc
+      register: proc_count
+      when: vllm_environment is not defined
+
+    - name: Insert OMP Cores used to vllm environment file
+      ansible.builtin.lineinfile:
+        path: "{{ working_directory }}/vllm_env"
+        regexp: "^VLLM_CPU_OMP_THREADS_BIND=(.*)$"
+        line: VLLM_CPU_OMP_THREADS_BIND="0-{{ proc_count.stdout | int - 1 }}"
+        state: present
+      when: vllm_environment is not defined
+
     - name: Create vllm environment file
       ansible.builtin.file:
         path: "{{ working_directory }}/vllm_env"

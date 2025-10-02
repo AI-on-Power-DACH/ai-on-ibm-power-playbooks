@@ -11,8 +11,10 @@ techzone:
     conda_dir: "/home/{{ ansible_user }}/micromamba"
     detached: true
     micromamba_location: "/usr/local/bin/micromamba"
-    model_repository: ibm-granite/granite-3.3-8b-instruct
-    model_file: Meta-Llama-3-8B.Q8_0.gguf
+    # model_repository: ibm-granite/granite-3.3-8b-instruct
+    model_repository: ibm-granite/granite-3.3-2b-instruct-GGUF
+    # model_file: Meta-Llama-3-8B.Q8_0.gguf
+    model_file:  granite-3.3-2b-instruct-Q8_0.gguf
     python_version: 3.11
     working_directory: "/home/{{ ansible_user }}/llm"
     llama_cpp_args:
@@ -25,3 +27,6 @@ techzone:
     # chroma db:
     chroma_env_name: chromadb # name of the environment to install chroma in.
     chroma_version: latest
+
+    # new python environment using pip
+    use_pip: false
