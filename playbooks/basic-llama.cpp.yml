@@ -217,7 +217,7 @@
 
     - name: Install huggingface-cli
       ansible.builtin.shell: |
-        {{ python_command }} -m pip install -U "huggingface_hub[cli]"
+        {{ python_command }} -m pip install -U "huggingface_hub[cli,hf_xet]"
 
     - name: Populate model path
       ansible.builtin.set_fact:
