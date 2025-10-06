@@ -219,6 +219,10 @@
       ansible.builtin.shell: |
         {{ python_command }} -m pip install -U "huggingface_hub[cli,hf_xet]"
 
+    - name: Check model deployment
+      ansible.builtin.meta: end_play
+      when: deploy_model | default(true) | bool
+
     - name: Populate model path
       ansible.builtin.set_fact:
         model_path: "{{ working_directory }}/models/{{ model_repository }}"
