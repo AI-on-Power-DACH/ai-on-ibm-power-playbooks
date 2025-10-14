@@ -156,7 +156,7 @@
     - name: Install venv dependencies
       when: use_pip | default(false) | bool
       ansible.builtin.command:
-        cmd: '{{ python_command }} -m pip install numpy torch sentencepiece gguf --prefer-binary --extra-index-url "https://wheels.developerfirst.ibm.com/ppc64le/linux https://repo.fury.io/mgiessing"'
+        cmd: '{{ python_command }} -m pip install numpy torch sentencepiece gguf --prefer-binary --extra-index-url https://wheels.developerfirst.ibm.com/ppc64le/linux --extra-index-url https://repo.fury.io/mgiessing'
       changed_when: false
 
     - name: Stop already existing llama.cpp service
