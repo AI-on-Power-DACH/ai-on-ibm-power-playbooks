@@ -221,7 +221,7 @@
 
     - name: Check model deployment
       ansible.builtin.meta: end_play
-      when: deploy_model | default(true) | bool
+      when: not deploy_model | default(true) | bool
 
     - name: Populate model path
       ansible.builtin.set_fact:
