@@ -4,7 +4,7 @@
     state: directory
     owner: "{{ ansible_user }}"
     mode: 0775
-    recurse: true
+    recurse: yes
 
 - name: Create temporary directory
   ansible.builtin.tempfile:
@@ -14,7 +14,7 @@
 - name: Install micromamba
   ansible.builtin.unarchive:
     remote_src: true
-    src: "https://micro.mamba.pm/api/micromamba/{{ arch }}/{{ version }}"
+    src: "https://micro.mamba.pm/api/micromamba/linux-ppc64le/latest"
     dest: "{{ tmpdir.path }}"
 
 - name: Copy micromamba to destination
@@ -31,13 +31,7 @@
     state: absent
 
 - name: Create shell function for micromamba
-  ansible.builtin.shell: "micromamba --root-prefix='{{ conda_dir }}' shell init --shell=bash"
+  ansible.builtin.shell: "micromamba shell init --shell=bash"
 
 - name: Activate micromamba environment
   ansible.builtin.shell: "echo 'micromamba activate --prefix={{ conda_dir }}' >> /home/{{ ansible_user }}/.bashrc"
-
-- name: Reload Shell on localhost
-  ansible.builtin.command:
-    cmd: source /home/{{ ansible_user }}/.bashrc
-  when: inventory_hostname == "localhost"
-  changed_when: false

@@ -50,20 +50,10 @@
           - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ rhel_version.stdout }}.noarch.rpm"
         state: latest
 
-
     - name: Enable powertools/codeready builder for RHEL (powertools under CentOS)
       become: true
       become_user: root
       command: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
-
-    - name: Install RPM Fusion repository (for ffmpeg)
-      become: true
-      become_user: root
-      ansible.builtin.dnf:
-        name:
-          - "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-{{ rhel_version.stdout }}.noarch.rpm"
-          - "https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-{{ rhel_version.stdout }}.noarch.rpm"
-        state: latest
 
     - name: Install the 'Development tools' package group
       become: true
@@ -80,24 +70,37 @@
           - bzip2
           - cmake
           - curl
-          - ffmpeg
-          - gcc
           - git
           - openblas-devel
           - libcurl-devel
           - libxcrypt-compat
         state: latest
 
-- name: Micromamba setup
-  hosts: techzone
-  tasks:
+    - name: Install gcc-toolset (RHEL < 10)
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - gcc-toolset-13
+        state: latest
+      when: rhel_version.stdout | float < 10
+
+    - name: Install gcc (RHEL >= 10)
+      become: true
+      become_user: root
+      ansible.builtin.dnf:
+        name:
+          - gcc
+        state: latest
+      when: rhel_version.stdout | float >= 10
+
     - name: "Check if micromamba already exists in {{ micromamba_location }}"
       ansible.builtin.stat:
         path: "{{ micromamba_location }}"
       register: dest_stat
 
     - name: Install micromamba
-      ansible.builtin.import_tasks: "{{ base_dir }}/support/download-and-extract-micromamba.yml"
+      ansible.builtin.import_tasks: "./support/download-and-extract-micromamba.yml"
       when: not dest_stat.stat.exists
 
     - name: Install basic Python dependencies
@@ -108,13 +111,8 @@
           - --yes
           - "--root-prefix={{ conda_dir }}"
           - "--prefix={{ conda_dir }}"
-          - --channel=rocketce
           - --channel=defaults
           - "python={{ python_version }}"
-  vars:
-    arch: linux-ppc64le
-    version: latest
-    base_dir: "."
 
 - name: LLM setup
   hosts: techzone
@@ -163,7 +161,7 @@
     
     - name: Install huggingface-cli
       ansible.builtin.shell: |
-        python{{ python_version }} -m pip install -U "huggingface_hub[cli]"
+        {{ conda_dir }}/bin/python -m pip install -U "huggingface_hub[cli,hf_xet]"
         
     - name: Populate model path
       ansible.builtin.set_fact:
@@ -176,7 +174,7 @@
         
     - name: Download LLM
       ansible.builtin.shell: |
-        huggingface-cli download \
+        {{ conda_dir }}/bin/hf download \
           {{ model_repository }} {{ model_file }} \
           --local-dir {{ model_dir }}
       when: not model_result.stat.exists
@@ -215,27 +213,32 @@
       ansible.builtin.debug:
         msg: "Parameters: {{ whisper_cpp_args }} {{ whisper_cpp_argv }}"
     
-    - name: Copy systemd service template for whisper.cpp
-      ansible.builtin.copy:
-        src: support/template.service
-        dest: /etc/systemd/system/whisper.cpp.service
-        owner: "{{ ansible_user }}"
-        mode: u=rw,g=r,o=rwx
+    - name: Delete existing service file for whisper.cpp
       become: true
       become_user: root
-
-    - name: Insert service data into whisper.cpp service file
-      become: true
-      become_user: root
-      ansible.builtin.lineinfile:
+      ansible.builtin.file:
         path: /etc/systemd/system/whisper.cpp.service
-        regexp: "{{ item.regexp }}"
-        line: "{{ item.line }}"
-        backrefs: yes
-      loop:
-        - { regexp: "^Description=(.*)$", line: "Description=Whisper.cpp Service" }
-        - { regexp: "^ExecStart=(.*)$", line: "ExecStart={{ working_directory }}/whisper.cpp/build/bin/whisper-server -m {{ model_dir }}/{{ model_file }} {{ whisper_cpp_args }} {{ whisper_cpp_argv }}" }
-        - { regexp: "^User=(.*)$", line: "User={{ ansible_user }}" }
+        state: absent
+
+    - name: Create systemd service for whisper.cpp
+      become: true
+      become_user: root
+      ansible.builtin.blockinfile:
+        create: true
+        mode: u=rw,g=r,o=r
+        owner: "{{ ansible_user }}"
+        path: /etc/systemd/system/whisper.cpp.service
+        block: |
+          [Unit]
+          Description=Whisper.cpp Service
+
+          [Service]
+          Type=simple
+          ExecStart={{ working_directory }}/whisper.cpp/build/bin/whisper-server -m {{ model_dir }}/{{ model_file }} {{ whisper_cpp_args }} {{ whisper_cpp_argv }}
+          User={{ ansible_user }}
+
+          [Install]
+          WantedBy=multi-user.target
 
     - name: Start whisper.cpp service
       ansible.builtin.systemd_service:
