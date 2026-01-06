@@ -337,3 +337,42 @@
         name: llama.cpp
       become: true
       become_user: root
+
+- name: Llama.cpp self tests
+  hosts: techzone
+  tasks:
+
+    - name: Skip test runs
+      when: not (run_selftests | default(true))
+      ansible.builtin.meta: end_play
+
+    - name: Tests
+      block:
+        - name: End-to-end check
+          register: test_out
+          ansible.builtin.shell:
+            cmd: |
+              curl http://localhost:{{ llama_cpp_argv["port"] | default("8080") }}/v1/models -H 'Authorization: Bearer {{ llama_cpp_argv["api-key"] | default("examplekey01") }}'
+
+        - name: Validate End-to-end check result
+          ansible.builtin.debug:
+            msg: "Model presented by OpenAI api matches installed modelfile."
+          failed_when: (test_out.stdout | from_json).models[0].name != model_file
+          changed_when: false
+
+        - name: Check api key
+          register: test_out
+          ansible.builtin.shell:
+            cmd: |
+                curl http://localhost:{{ llama_cpp_argv["port"] | default("8080") }}/v1/models/{{ model_file }} -H 'Authorization: Bearer {{ llama_cpp_argv["api-key"] | default("examplekey01") }}'
+
+        - name: Validate api key result
+          ansible.builtin.fail:
+            msg: "The provided api key is invalid."
+          # llamacpp does not support the models/{model} endpoint (afaik), the error field and code will always be populated.
+          when: (test_out.stdout | from_json).error.code == 401
+          changed_when: false
+
+      rescue:
+        - ansible.builtin.fail:
+            msg: "Health checks did not finish successfully. Install not successful!"
