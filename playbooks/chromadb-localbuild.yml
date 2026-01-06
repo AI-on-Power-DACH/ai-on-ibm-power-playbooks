@@ -2,19 +2,21 @@
 #
 # This is done by downloading and building chromadb itself.
 #
+# NOTE: up to date chromadb versions are available via pip using 
+#       the ibm wheels in combination with the mgiessing gemfury repo, 
+#       as installed by the venv script.
+#
 # Parameters:
 # - chroma_env_name: Name of the micromamba env in which chroma will be installed
 # - chroma_version: The version of chroma to install (defaults to latest)
 # - working_directory: The directory in which the chroma/ subdir for all files (e.g. python) of chroma will live.
-# - conda_dir:  Directory for all conda environments (root-prefix)
+# - conda_dir:  Directory for all conda environments (root-prefix) (when use_pip = false)
 # - python_version: The version of python to use for the micromamba env
+# - use_pip(bool): Whether to use pip instead of teh default micromamba install for python setup
 ---
-- name: Install ChromaDB
+- name: Setup System
   hosts: techzone
   vars:
-    # required for micromamba install
-    arch: linux-ppc64le
-    version: latest
     # compatible/tested protoc version
     protoc_version: 30.2
 
@@ -22,13 +24,13 @@
     - name: Ping host
       ansible.builtin.ping:
 
-    - name: Setup PIP Repo (fury.io/mgiesing)
+    - name: Setup PIP Repo
       become: true
       become_user: root
       ansible.builtin.blockinfile:
         dest: /etc/profile.d/pip_setup.sh
         block: |
-          export PIP_EXTRA_INDEX_URL=https://repo.fury.io/mgiessing
+          export PIP_EXTRA_INDEX_URL="https://wheels.developerfirst.ibm.com/ppc64le/linux https://repo.fury.io/mgiessing"
           export PIP_PREFER_BINARY=true
         owner: root
         state: present
@@ -52,6 +54,7 @@
           - curl
           - unzip
           - bzip2
+          - openblas-devel
           - '@Development tools'
         state: present
 
@@ -68,6 +71,18 @@
       ansible.builtin.shell:
         chdir: "{{ build_dir.path }}"
         cmd: curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v{{ protoc_version }}/protoc-{{ protoc_version }}-linux-ppcle_64.zip && unzip -o protoc-{{ protoc_version }}-linux-ppcle_64.zip -d $HOME/.local
+
+- name: Setup Micromamba
+  hosts: all
+  vars:
+    # required for micromamba install
+    arch: linux-ppc64le
+    version: latest
+  tasks:
+    # skip the entire Micromamba setup play if pip should be used.
+    - name: Check Mamba vs pip
+      ansible.builtin.meta: end_play
+      when: use_pip | default(false) | bool
 
     - name: "Check if micromamba already exists in {{ micromamba_location }}"
       ansible.builtin.stat:
@@ -97,6 +112,29 @@
           - python={{ python_version }}
       when: not mamba_install_env.stdout == chroma_env_name | default('chroma')
 
+- name: Setup Pip Venv
+  ansible.builtin.import_playbook: "{{ base_dir }}/support/setup-python-venv.yml"
+  vars:
+    base_dir: .
+  when: use_pip | default(false) | bool
+
+
+- name: Install ChromaDB
+  hosts: all
+  tasks:
+
+    - name: Set Venv python facts
+      ansible.builtin.set_fact:
+        python_command: "{{ venv_python }}"
+        python_bin: "{{ venv_bin }}/"
+      when: use_pip | default(false) | bool
+
+    - name: Set Micromamba python facts
+      ansible.builtin.set_fact:
+        python_command: "{{ conda_dir }}/envs/{{ chroma_env_name | default('chroma') }}/bin/python"
+        python_bin: "{{ conda_dir }}/envs/{{ chroma_env_name | default('chroma') }}/bin/"
+      when: not use_pip | default(false) | bool
+
     - name: Install Build Tools
       ansible.builtin.command:
         argv:
@@ -112,6 +150,17 @@
           - --channel
           - defaults
           - maturin
+      when: not use_pip | default(false) | bool
+
+    - name: Install Build Tools
+      ansible.builtin.command:
+        argv:
+          - "{{ python_command }}"
+          - -m
+          - pip
+          - install
+          - maturin
+      when: use_pip | default(false) | bool
 
     - name: Clean Chroma dir
       ansible.builtin.file:
@@ -138,11 +187,8 @@
       ansible.builtin.command:
         chdir: "{{ working_directory }}/chroma"
         argv:
-          - micromamba
-          - run
-          - --root-prefix={{ conda_dir }}
-          - -n
-          - "{{ chroma_env_name | default('chroma') }}"
+          - "{{ python_command }}"
+          - -m
           - pip
           - install
           - build
@@ -151,12 +197,7 @@
       ansible.builtin.command:
         chdir: "{{ working_directory }}/chroma"
         argv:
-          - micromamba
-          - run
-          - --root-prefix={{ conda_dir }}
-          - -n
-          - "{{ chroma_env_name | default('chroma') }}"
-          - python
+          - "{{ python_command }}"
           - -m
           - build
           - .
@@ -164,7 +205,7 @@
     - name: Install Chroma
       ansible.builtin.shell:
         chdir: "{{ working_directory }}/chroma/dist"
-        cmd: micromamba run --root-prefix={{ conda_dir }} -n "{{ chroma_env_name | default('chroma') }}" pip install *.whl
+        cmd: "{{ python_command }} -m pip install *.whl"
 
     - name: Remove temp dir
       ansible.builtin.file:
