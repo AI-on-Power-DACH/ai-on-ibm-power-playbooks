@@ -341,6 +341,9 @@
 - name: Llama.cpp self tests
   hosts: techzone
   tasks:
+    - name: Check model deployment
+      ansible.builtin.meta: end_play
+      when: not deploy_model | default(true) | bool
 
     - name: Skip test runs
       when: not (run_selftests | default(true))
