@@ -29,6 +29,25 @@
   become_user: root
   command: subscription-manager repos --enable codeready-builder-for-rhel-{{ rhel_version.stdout }}-ppc64le-rpms
 
+- name: Apply OpenSSL Fix (RHEL10)
+  # appliess the fix for https://access.redhat.com/solutions/7134243 before installing development tools
+  become: true
+  become_user: root
+  ansible.builtin.dnf:
+    name:
+      - rpm-sequoia
+      - openssl-libs
+    state: latest
+
+- name: Apply GPG Key Fix (RHEL10.1)
+  # applies the fix for a gpg key issue with many packages in RHEL10.1 (see: https://access.redhat.com/solutions/7136991)
+  become: true
+  become_user: root
+  ansible.builtin.dnf:
+    name:
+      - redhat-release
+    state: latest
+
 - name: Install the 'Development tools' package group
   become: true
   become_user: root
