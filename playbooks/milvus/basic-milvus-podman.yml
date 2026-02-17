@@ -18,6 +18,16 @@
       owner: "{{ ansible_user }}"
       mode: "0775"
       recurse: true
+
+   - name: Apply GPG Key Fix (RHEL10.1)
+     # applies the fix for a gpg key issue with many packages in RHEL10.1 (see: https://access.redhat.com/solutions/7136991)
+     become: true
+     become_user: root
+     ansible.builtin.dnf:
+      name:
+       - redhat-release
+      state: latest
+
    - name: Install Podman
      become: true
      become_user: root
